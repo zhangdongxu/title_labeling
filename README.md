@@ -5,7 +5,7 @@ README
 > Three strategies can be implemented: 
 > * Paragraph-wise co-occurrence (line-wise)
 > * Window-based co-occurrence
-> * Weighted window-based co-occurrence, following the formula:  smoothingfactor/(smoothingfactor + distance)
+> * Weighted window-based co-occurrence, following the formula: smoothingfactor/(smoothingfactor + distance)
 > ----
 > input files: 
 > titleFile descriptorFile inputFiles
