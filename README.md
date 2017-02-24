@@ -1,16 +1,15 @@
-README
-descriptor.py helps you to count co-occurrence frequency of descriptors given titles.
+
+This tool helps you to count co-occurrence frequency of descriptors given titles.
+*Edited by Dongxu Zhang on Feb 24th, 2017.*
 ----
 Three strategies can be implemented: 
 * Paragraph-wise co-occurrence (line-wise)
 * Window-based co-occurrence
 * Weighted window-based co-occurrence, following the formula: $ smoothingfactor/(smoothingfactor + distance) $
 
+input files:  titleFile descriptorFile inputFiles
+
 ----
-input files: 
-titleFile descriptorFile inputFiles
-----
-Edited by Dongxu Zhang on Feb 24th, 2017.
 
 1. To count frequency, you can simply change the first few lines of count.sh and run the shell:
 
