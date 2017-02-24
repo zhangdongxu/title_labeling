@@ -1,6 +1,8 @@
 
 This tool helps you to count co-occurrence frequency of descriptors given titles.
+
 *Edited by Dongxu Zhang on Feb 24th, 2017.*
+
 ----
 Three strategies can be implemented: 
 * Paragraph-wise co-occurrence (line-wise)
