@@ -1,10 +1,10 @@
 #!/bin/sh
 
-modeltype=window #paragraph, window or weightedwindow
-modelname=descriptor-window #any name you like
-process_num=1 #number of process
+modeltype=weightedwindow #paragraph, window or weightedwindow
+modelname=descriptor-weightedwindow-weight2 #any name you like
+process_num=7 #number of process
 
-workdir=/home/dongxu/title_labeling
+workdir=/home/dongxu/work/title_labeling
 inputdir=/zfs/octp/sogout/outputs/filtered
 descriptor_path=/zfs/octp/sogout/outputs/extract_desc/desc.txt
 title_path=/zfs/octp/sogout/outputs/extract_desc/movie_titles_logp.txt

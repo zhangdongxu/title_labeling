@@ -3,13 +3,15 @@ import argparse
 import os
 import re
 import pickle
-import numpy as np
 import copy
 import math
+import struct
 
 parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group(required=True)
-group.add_argument("-l","--load",help="load previous model instead of building a new one.", action="store_true")
+group.add_argument("-l","--load",help="load previous model instead of building a new one and \
+                                       also transform the co-occurrence dict", action="store_true")
+group.add_argument("-fl","--fastload",help="load previous model instead of building a new one.", action="store_true")
 group.add_argument("-b","--build",help="build a new model.", action="store_true")
 group.add_argument("-m","--merge",help="merge the model files",action="store_true")
 parser.add_argument("--model_type",help="This parameter defines the type of the new model. \
@@ -52,26 +54,24 @@ class Descriptor:
         descriptors = open(desc_file).read().decode('utf-8').split('\n')
         for i in range(len(descriptors)):
             descriptors[i] = "".join(descriptors[i].split())
-        descriptors = list(set(descriptors))
-        desc_set = []
+        desc_dict = {}#dict is faster than set or list
         for d in descriptors:
-            desc_set.append(d)
-        desc_set = set(desc_set)
+            if d not in desc_dict:
+                desc_dict[d] = 1
+        
         print str(len(descriptors)) + " descriptors loaded."
-        self.desc_set = desc_set
+        self.desc_dict = desc_dict
 
     def load_title(self, title_file):
-    
         titles=open(title_file).read().decode('utf-8').split('\n')[:-1]
         for i in range(len(titles)):
             titles[i] = titles[i].split()[0]
-        titles = list(set(titles))
-        title_set = []
+        title_dict = {}#title is faster than set or list
         for t in titles:
-            title_set.append(t)
-        title_set = set(title_set)
+            if t not in title_dict:
+                title_dict[t] = 1
         print str(len(titles)) + " title names loaded."
-        self.title_set = title_set
+        self.title_dict = title_dict
 
     def match_pattern_in_line(self, line):
         iterator = self.pattern.finditer(line)
@@ -84,7 +84,6 @@ class Descriptor:
         raise NotImplementedError
     
     def save_model(self, model_file):
-
         model_dict = {"co_freq_dict":self.co_freq_dict, \
                       "title_freq_dict":self.title_freq_dict, \
                       "desc_freq_dict":self.desc_freq_dict}
@@ -121,6 +120,64 @@ class Descriptor:
         self.save_model(output_model_file)
         print "model merged"
 
+    def load_model(self, model_file):
+        model_dict = pickle.load(open(model_file,"rb"))
+        self.title_freq_dict = model_dict["title_freq_dict"]
+        self.desc_freq_dict = model_dict["desc_freq_dict"]
+        self.co_freq_dict = model_dict["co_freq_dict"]
+
+        self.title_sqrt_dict = copy.deepcopy(self.title_freq_dict)
+        for title in self.title_sqrt_dict:
+            self.title_sqrt_dict[title] = math.sqrt(float(self.title_sqrt_dict[title]))
+        self.co_freq_devide_title = copy.deepcopy(self.co_freq_dict)
+        for desc, titles in self.co_freq_devide_title.items():
+            for title in titles:
+                self.co_freq_devide_title[desc][title] /= self.title_sqrt_dict[title]
+
+    def match_desc(self, string):
+        ngram_descs = []
+        string_length = len(string)
+        current_index = 0
+        while(current_index < string_length):
+            if current_index + 4 <= string_length and \
+               string[current_index:current_index + 4] in self.co_freq_devide_title:
+                ngram_descs.append(string[current_index:current_index + 4])
+                current_index += 4
+            elif current_index + 3 <= string_length and \
+               string[current_index:current_index + 3] in self.co_freq_devide_title:
+                ngram_descs.append(string[current_index:current_index + 3])
+                current_index += 3 
+            elif current_index + 2 <= string_length and \
+               string[current_index:current_index + 2] in self.co_freq_devide_title:
+                ngram_descs.append(string[current_index:current_index + 2])
+                current_index += 2
+            else:
+                current_index += 1
+        return ngram_descs
+
+    def rank_titles(self, ngram_descs, topk):
+        result_titles = []
+        if len(ngram_descs) == 0:
+            print "描述词未出现"
+            for k,v in sorted(self.title_freq_dict.items(), \
+                        lambda x, y: cmp(x[1], y[1]), reverse=True)[:topk]:
+                result_titles.append(k)
+
+        else:
+            title_scores = {}
+            for desc in ngram_descs:
+                if desc in self.co_freq_devide_title:
+                    for title, score in self.co_freq_devide_title[desc].items():
+                        if title not in title_scores:
+                            title_scores[title] = score
+                        else:
+                            title_scores[title] += score
+            
+            for k,v in sorted(title_scores.items(), \
+                        lambda x, y: cmp(x[1], y[1]), reverse=True)[:topk]:
+                result_titles.append(k)
+        return result_titles
+
 class DescriptorParagraph(Descriptor):
 
     def __descriptor_allmatch(self, string):
@@ -128,15 +185,15 @@ class DescriptorParagraph(Descriptor):
         string_length = len(string)
         if string_length >= 2:
             for i in range(string_length - 1):
-                if string[i:i + 2] in self.desc_set:
+                if string[i:i + 2] in self.desc_dict:
                     ngram_descs.append(string[i:i + 2])
         if string_length >= 3:
             for i in range(string_length - 2):
-                if string[i:i + 3] in self.desc_set:
+                if string[i:i + 3] in self.desc_dict:
                     ngram_descs.append(string[i:i + 3])
         if string_length >= 4:
             for i in range(string_length - 3):
-                if string[i:i + 4] in self.desc_set:
+                if string[i:i + 4] in self.desc_dict:
                     ngram_descs.append(string[i:i + 4])
         return ngram_descs
 
@@ -146,15 +203,15 @@ class DescriptorParagraph(Descriptor):
         current_index = 0
         while(current_index < string_length):
             if current_index + 4 <= string_length and \
-               string[current_index:current_index + 4] in self.desc_set:
+               string[current_index:current_index + 4] in self.desc_dict:
                 ngram_descs.append(string[current_index:current_index + 4])
                 current_index += 4
             elif current_index + 3 <= string_length and \
-               string[current_index:current_index + 3] in self.desc_set:
+               string[current_index:current_index + 3] in self.desc_dict:
                 ngram_descs.append(string[current_index:current_index + 3])
                 current_index += 3 
             elif current_index + 2 <= string_length and \
-               string[current_index:current_index + 2] in self.desc_set:
+               string[current_index:current_index + 2] in self.desc_dict:
                 ngram_descs.append(string[current_index:current_index + 2])
                 current_index += 2
             else:
@@ -183,7 +240,7 @@ class DescriptorParagraph(Descriptor):
             history = 0
             for start, end in pattern_positions:
                 title = line[start + 1:end - 1]
-                if start < end - 2 and title in self.title_set:
+                if start < end - 2 and title in self.title_dict:
                     matched_titles.append(title)
                     matched_descriptors.extend(self.__descriptor_maxmatch(line[history:start]))
                     history = end
@@ -210,6 +267,7 @@ class DescriptorParagraph(Descriptor):
                 else:
                     self.desc_freq_dict[desc] += 1
 
+
 class DescriptorWindow(Descriptor):
 
     def __descriptor_allmatch(self, string, start, end):
@@ -217,19 +275,19 @@ class DescriptorWindow(Descriptor):
         #2gram
         if length >= 2:
             for i in range(start, end - 1):
-                if string[i:i + 2] in self.desc_set:
+                if string[i:i + 2] in self.desc_dict:
                     self.index_desc_start[i].append(string[i:i + 2])
                     self.index_desc_end[i + 1].append(string[i:i + 2])
         #3gram
         if length >= 3:
             for i in range(start, end - 2):
-                if string[i:i + 3] in self.desc_set:
+                if string[i:i + 3] in self.desc_dict:
                     self.index_desc_start[i].append(string[i:i + 3])
                     self.index_desc_end[i + 2].append(string[i:i + 3])
         #4gram
         if length >= 4:
             for i in range(start, end - 3):
-                if string[i:i + 4] in self.desc_set:
+                if string[i:i + 4] in self.desc_dict:
                     self.index_desc_start[i].append(string[i:i + 4])
                     self.index_desc_end[i + 3].append(string[i:i + 4])
 
@@ -237,17 +295,17 @@ class DescriptorWindow(Descriptor):
         current_index = start
         while(current_index < end):
             if current_index + 3 < end and \
-               string[current_index:current_index + 4] in self.desc_set:
+               string[current_index:current_index + 4] in self.desc_dict:
                 self.index_desc_start[current_index].append(string[current_index:current_index + 4])
                 self.index_desc_end[current_index + 3].append(string[current_index:current_index + 4])
                 current_index += 4
             elif current_index + 2 < end and \
-               string[current_index:current_index + 3] in self.desc_set:
+               string[current_index:current_index + 3] in self.desc_dict:
                 self.index_desc_start[current_index].append(string[current_index:current_index + 3])
                 self.index_desc_end[current_index + 2].append(string[current_index:current_index + 3])
                 current_index += 3
             elif current_index + 1 < end and \
-               string[current_index:current_index + 2] in self.desc_set:
+               string[current_index:current_index + 2] in self.desc_dict:
                 self.index_desc_start[current_index].append(string[current_index:current_index + 2])
                 self.index_desc_end[current_index + 1].append(string[current_index:current_index + 2])
                 current_index += 2
@@ -293,7 +351,7 @@ class DescriptorWindow(Descriptor):
             for start, end in pattern_positions:
                 if start < end - 2:
                     title = line[start + 1:end - 1]
-                    if title in self.title_set:
+                    if title in self.title_dict:
                         #count frequency of titles
                         if title not in self.title_freq_dict:
                             self.title_freq_dict[title] = 1
@@ -330,6 +388,7 @@ class DescriptorWindow(Descriptor):
                         right_window = (end, end + self.window_size)
                     else:
                         right_window = (end, title_positions[i + 1][0])
+
                 title = line[start + 1:end - 1]
 
                 #left window
@@ -361,6 +420,8 @@ class DescriptorWindow(Descriptor):
 class DescriptorWeightedWindow(DescriptorWindow):
 
     def set_window_weight(self, window_size, sf):
+        descriptor = Descriptor()
+        descriptor.load_model(args.model)
         self.weight = []
         self.window_size = window_size
         for i in range(window_size):
@@ -402,6 +463,30 @@ def main():
         descriptor = Descriptor()
         descriptor.merge_model(merge_dir, output_model_file)
 
+    elif args.fastload:
+        descriptor = Descriptor()
+        descriptor.load_model(args.model)
+        
+        while(1):
+            print "输入描述[d] or 退出[exit]：[d/exit]"
+            act = raw_input().decode('utf-8')
+            if act == "d":
+                print "请输入描述："
+                try:
+                    string = raw_input().decode('utf-8')
+                except:
+                    string = raw_input()
+
+                ngram_descs = descriptor.match_desc(string)
+                titles = descriptor.rank_titles(ngram_descs, 10)
+                print "——————————————————————"
+                for title in titles:
+                    try:
+                        print title.encode('utf-8')
+                    except:
+                        print title
+            elif act == "exit":
+                break
     elif args.load:
         model_file = args.model
         model_dict = pickle.load(open(model_file,"rb"))

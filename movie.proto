@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package movie;
+
+service FindMovieService {
+    rpc FindMovies(FindMovieRequest) returns (FindMovieReply) {}
+}
+
+message FindMovieRequest {
+    string query = 1;
+}
+
+message FindMovieReply {
+    repeated string movies = 1;
+}

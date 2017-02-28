@@ -18,24 +18,29 @@ input files:  titleFile descriptorFile inputFiles
    ```shell
    nohup sh count.sh > log.logname &
    ```
+2. To start a server, you can use following command:
+   ```shell
+   nohup python movie_server.py --model model_path_you_want_to_load > log.server.model_name &
+   ```
 
-2. You can use *descriptor.py* for specific needs:
+3. You can also use *descriptor.py* for other specific needs:
 
    ```shell
    #help
    python descriptor.py -h
 
-   #build a model
+   #build a model with a single corpus file input
    python descriptor.py -b --model_type weightedwindow --window_size window_size --smooth_factor smooth_factor --input your_input_file --descriptor your_desc_file --title your_title_file  --model output_model_path
 
    #merge models you previously built
    python descriptor.py -m --mergedir output_model_directory --model output_model_path 
 
-   #load a model and look at rankings
+   #load a model and look at rankings in a interactive mode
+   python descriptor.py -fl --model model_path_you_want_to_load 
    python descriptor.py -l --model model_path_you_want_to_load 
    ```
 
-3. You can instantiate `class Descriptor` or `class DescriptorWeightedWindow`  etc. Or you can inherit them for your needs.
+4. You can import descriptor.py and instantiate `class Descriptor` or `class DescriptorWeightedWindow`  etc. Or you can inherit them for your needs.
 
    ```python
    class Descriptor:
