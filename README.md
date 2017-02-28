@@ -8,7 +8,7 @@ pip install grpcio-tools
 *Edited by Dongxu Zhang on Feb 24th, 2017.*
 
 ----
-Three strategies can be implemented: 
+Three strategies can be implemented with parameter $model_type$ : 
 * Paragraph-wise co-occurrence (line-wise)
 * Window-based co-occurrence
 * Weighted window-based co-occurrence, following the formula: $ smoothingfactor/(smoothingfactor + distance) $
