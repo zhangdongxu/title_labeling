@@ -8,12 +8,10 @@ pip install grpcio-tools
 
 
 ----
-Three strategies can be implemented with parameter $model_type$ : 
+Three strategies can be implemented with parameter `--model_type`: 
 * Paragraph-wise co-occurrence (line-wise)
 * Window-based co-occurrence
 * Weighted window-based co-occurrence, following the formula: $ smoothingfactor/(smoothingfactor + distance) $
-
-input files:  titleFile descriptorFile inputFiles
 
 ----
 
@@ -22,6 +20,8 @@ input files:  titleFile descriptorFile inputFiles
    ```shell
    nohup sh count.sh > log.logname &
    ```
+   You need to modify the variables in the script. Especially the input files:  titleFile descriptorFile inputFiles
+   
 2. To start a server, you can use following command:
    ```shell
    nohup python movie_server.py --model model_path_you_want_to_load > log.server.model_name &
