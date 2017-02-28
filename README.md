@@ -5,7 +5,7 @@ If you want to start a service with movie_server.py, then you should install grp
 pip install grpcio
 pip install grpcio-tools
 ```
-*Edited by Dongxu Zhang on Feb 24th, 2017.*
+
 
 ----
 Three strategies can be implemented with parameter $model_type$ : 
@@ -56,4 +56,5 @@ input files:  titleFile descriptorFile inputFiles
    class DescriptorWeightedWindow(DescriptorWindow)
    ```
 
+*Edited by Dongxu Zhang on Feb 24th, 2017.*
    ​
