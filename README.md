@@ -20,7 +20,8 @@ Three strategies can be implemented with parameter `--model_type`:
    ```shell
    nohup sh count.sh > log.logname &
    ```
-   You need to modify the variables in the script. Especially the input files:  titleFile descriptorFile inputFiles
+   You need to modify variables in the top of this script. 
+   This script read some corpus files and output a model for further usage.
    
 2. To start a server, you can use following command:
    ```shell
