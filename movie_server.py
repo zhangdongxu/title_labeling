@@ -38,6 +38,7 @@ def serve():
     server.add_insecure_port(args.address)
     server.start()
     print "service started on " + args.address
+    sys.stdout.flush()
     while True:
         time.sleep(0.1)
 
