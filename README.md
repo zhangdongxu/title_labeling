@@ -3,7 +3,6 @@ This tool helps you to count co-occurrence frequency of descriptors given movie 
 If you want to start a service with movie_server.py, then you should install grpc: 
 ```shell
 pip install grpcio
-pip install grpcio-tools
 ```
 
 ----
