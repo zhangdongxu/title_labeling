@@ -1,9 +1,6 @@
 
 This tool helps you to count co-occurrence frequency of descriptors given movie titles.
-If you want to start a service with movie_server.py, then you should install grpc: 
-```shell
-pip install grpcio
-```
+When the service started, it requires users' queries and returns a list of movie titles most related.
 
 ----
 
@@ -15,14 +12,19 @@ pip install grpcio
    You need to modify variables in the top of this script. 
    This script read some corpus files and output a model for further usage.
    
-2. To start a server in a docker container, you can use following command:
+2. To start a server in a docker container, you can use following command, the server load model.p and save log file to log.server:
    ```shell
+   #build a docker image. This command will only be executed one time. 
    sudo docker build -t <image name> .
-   sudo docker run --security-opt seccomp=unconfined -p 5011:5011 -v $PWD:/home/cpp/title_labeling --name <container name> -it <image name> bash
-   nohup python movie_server.py --model model_path_you_want_to_load > log.server &
+   
+   #start a service by running a container over the image.
+   sudo docker run -p <port>:5011 -v $PWD:/home/cpp/title_labeling --name <container name> -it <image name>
    ```
-
-3. You can also use *descriptor.py* for other specific needs:
+3. If you want to start a service with movie_server.py, then you should install grpc: 
+   ```shell
+   pip install grpcio
+   ```
+4. You can also use *descriptor.py* for other specific needs:
 
    ```shell
    #help
@@ -39,7 +41,7 @@ pip install grpcio
    python descriptor.py -l --model model_path_you_want_to_load 
    ```
 
-4. You can import descriptor.py and instantiate `class Descriptor` or `class DescriptorWeightedWindow`  etc. Or you can inherit them for your needs.
+5. You can import descriptor.py and instantiate `class Descriptor` or `class DescriptorWeightedWindow`  etc. Or you can inherit them for your needs.
 
    ```python
    class Descriptor:
