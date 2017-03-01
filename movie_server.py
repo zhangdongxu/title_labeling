@@ -11,7 +11,7 @@ from descriptor import Descriptor
 parser = argparse.ArgumentParser()
 parser.add_argument("--model",help="the path of the model to save or load",\
         required=True)
-parser.add_argument("--address", help="the ip and port this service want to listen", default="localhost:5011")
+parser.add_argument("--address", help="the ip and port this service want to listen", default="[::]:5011")
 args = parser.parse_args()
 descriptor = Descriptor()
 descriptor.load_model(args.model)
@@ -39,7 +39,7 @@ def serve():
     server.start()
     print "service started on " + args.address
     while True:
-        time.sleep(1)
+        time.sleep(0.1)
 
 if __name__ == '__main__':
     serve()
