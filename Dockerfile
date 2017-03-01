@@ -91,8 +91,8 @@ RUN apt-get update \
 RUN apt-get install -y python-pip 
 RUN pip install numpy && pip install grpcio
 
-ADD . /home/cpp/findMovieTitle
-WORKDIR /home/cpp/findMovieTitle
+ADD . /home/cpp/title_labeling
+WORKDIR /home/cpp/title_labeling
 
 EXPOSE 5011
 
