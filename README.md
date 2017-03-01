@@ -52,6 +52,7 @@ pip install grpcio-tools
    class DescriptorWeightedWindow(DescriptorWindow)
    ```
 ----
+
 Three strategies can be implemented with parameter `--model_type`: 
 * Paragraph-wise co-occurrence (line-wise)
 * Window-based co-occurrence
