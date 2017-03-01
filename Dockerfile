@@ -14,4 +14,4 @@ WORKDIR /home/cpp/title_labeling
 
 EXPOSE 5011
 
-CMD ["python", "movie_server.py", "--model", "model.p"]
+CMD ["sh", "movie_server.sh"]

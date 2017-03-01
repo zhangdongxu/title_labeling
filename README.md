@@ -18,7 +18,7 @@ When the service started, it requires users' queries and returns a list of movie
    sudo docker build -t <image name> .
    
    #start a service by running a container over the image.
-   sudo docker run -p <port>:5011 -v $PWD:/home/cpp/title_labeling --name <container name> -it <image name>
+   sudo docker run -p <port>:5011 -v $PWD:/home/cpp/title_labeling --name <container name> -d <image name>
    ```
 3. If you want to start a service with movie_server.py, then you should install grpc: 
    ```shell
