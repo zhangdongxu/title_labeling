@@ -1,15 +1,17 @@
 
-This tool helps you to count co-occurrence frequency of descriptors given titles.
+This tool helps you to count co-occurrence frequency of descriptors given movie titles.
+If you want to start a service with movie_server.py, then you should install grpc: 
+```shell
+pip install grpcio
+pip install grpcio-tools
+```
 
-*Edited by Dongxu Zhang on Feb 24th, 2017.*
 
 ----
-Three strategies can be implemented: 
+Three strategies can be implemented with parameter `--model_type`: 
 * Paragraph-wise co-occurrence (line-wise)
 * Window-based co-occurrence
 * Weighted window-based co-occurrence, following the formula: $ smoothingfactor/(smoothingfactor + distance) $
-
-input files:  titleFile descriptorFile inputFiles
 
 ----
 
@@ -18,6 +20,9 @@ input files:  titleFile descriptorFile inputFiles
    ```shell
    nohup sh count.sh > log.logname &
    ```
+   You need to modify variables in the top of this script. 
+   This script read some corpus files and output a model for further usage.
+   
 2. To start a server, you can use following command:
    ```shell
    nohup python movie_server.py --model model_path_you_want_to_load > log.server.model_name &
@@ -52,4 +57,5 @@ input files:  titleFile descriptorFile inputFiles
    class DescriptorWeightedWindow(DescriptorWindow)
    ```
 
+*Edited by Dongxu Zhang on Feb 24th, 2017.*
    ​

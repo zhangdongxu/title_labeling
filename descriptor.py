@@ -5,7 +5,6 @@ import re
 import pickle
 import copy
 import math
-import struct
 
 parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group(required=True)
