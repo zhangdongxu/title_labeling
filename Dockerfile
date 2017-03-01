@@ -9,8 +9,8 @@ RUN \
 # install grpcio
 RUN pip install grpcio
 
-ADD . /home/cpp/findMovieTitle
-WORKDIR /home/cpp/findMovieTitle
+ADD . /home/cpp/title_labeling
+WORKDIR /home/cpp/title_labeling
 
 EXPOSE 5011
 
