@@ -6,13 +6,6 @@ pip install grpcio
 pip install grpcio-tools
 ```
 
-
-----
-Three strategies can be implemented with parameter `--model_type`: 
-* Paragraph-wise co-occurrence (line-wise)
-* Window-based co-occurrence
-* Weighted window-based co-occurrence, following the formula: $ smoothingfactor/(smoothingfactor + distance) $
-
 ----
 
 1. To count frequency, you can simply change the first few lines of count.sh and run the shell:
@@ -25,7 +18,9 @@ Three strategies can be implemented with parameter `--model_type`:
    
 2. To start a server, you can use following command:
    ```shell
-   nohup python movie_server.py --model model_path_you_want_to_load > log.server.model_name &
+   sudo docker build -t <image name> .
+   sudo docker --security-opt seccomp=unconfined -p 5011:5011 -v $PWD:/home/cpp/findMovieTitle --name <container name> -it <image name> bash
+   nohup python movie_server.py --model model_path_you_want_to_load > log.server &
    ```
 
 3. You can also use *descriptor.py* for other specific needs:
@@ -56,6 +51,11 @@ Three strategies can be implemented with parameter `--model_type`:
    class DescriptorWindow(Descriptor)
    class DescriptorWeightedWindow(DescriptorWindow)
    ```
+----
+Three strategies can be implemented with parameter `--model_type`: 
+* Paragraph-wise co-occurrence (line-wise)
+* Window-based co-occurrence
+* Weighted window-based co-occurrence, following the formula: $ smoothingfactor/(smoothingfactor + distance) $
 
 *Edited by Dongxu Zhang on Feb 24th, 2017.*
    ​
