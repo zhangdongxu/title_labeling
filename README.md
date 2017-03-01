@@ -16,7 +16,7 @@ pip install grpcio-tools
    You need to modify variables in the top of this script. 
    This script read some corpus files and output a model for further usage.
    
-2. To start a server, you can use following command:
+2. To start a server in a docker container, you can use following command:
    ```shell
    sudo docker build -t <image name> .
    sudo docker --security-opt seccomp=unconfined -p 5011:5011 -v $PWD:/home/cpp/findMovieTitle --name <container name> -it <image name> bash
