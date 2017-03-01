@@ -19,7 +19,7 @@ pip install grpcio-tools
 2. To start a server in a docker container, you can use following command:
    ```shell
    sudo docker build -t <image name> .
-   sudo docker --security-opt seccomp=unconfined -p 5011:5011 -v $PWD:/home/cpp/findMovieTitle --name <container name> -it <image name> bash
+   sudo docker --security-opt seccomp=unconfined -p 5011:5011 -v $PWD:/home/cpp/title_labeling --name <container name> -it <image name> bash
    nohup python movie_server.py --model model_path_you_want_to_load > log.server &
    ```
 
