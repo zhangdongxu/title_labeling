@@ -5,6 +5,7 @@ import re
 import pickle
 import copy
 import math
+import sys
 
 parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group(required=True)
@@ -116,6 +117,7 @@ class Descriptor:
                 else:
                     self.desc_freq_dict[desc] += model_dict["desc_freq_dict"][desc]
             print model_file + " merged"
+            sys.stdout.flush()
         self.save_model(output_model_file)
         print "model merged"
 
