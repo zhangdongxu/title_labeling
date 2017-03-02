@@ -421,8 +421,6 @@ class DescriptorWindow(Descriptor):
 class DescriptorWeightedWindow(DescriptorWindow):
 
     def set_window_weight(self, window_size, sf):
-        #descriptor = Descriptor()
-        #descriptor.load_model(args.model)
         self.weight = []
         self.window_size = window_size
         for i in range(window_size):
