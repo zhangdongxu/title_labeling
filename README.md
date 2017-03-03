@@ -24,6 +24,11 @@ When the service started, it requires users' queries and returns a list of movie
    ```shell
    pip install grpcio
    ```
+   
+   If you want to re-design a .proto file and compile it, you should also install grpc tool:
+   ```shell
+   pip install grpcio-tools
+   ```
 4. You can also use *descriptor.py* for other specific needs:
 
    ```shell
