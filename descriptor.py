@@ -22,7 +22,8 @@ parser.add_argument("--input",help="the path of the input directory that contain
         to cope with.")
 parser.add_argument("--descriptor",help="the path of the file that contains\
         descriptors",default="/zfs/octp/sogout/outputs/extract_desc/desc.txt")
-parser.add_argument("--title",help="the path of the file that contains film titles",default="")
+parser.add_argument("--title",help="the path of the file that contains film titles. \
+                                    If this parameter is not given, script will match titles with brackets only.",default="")
 parser.add_argument("--model",help="the path of the model to save or load",\
         required=True)
 parser.add_argument("--mergedir",help="the path of directory where model files were saved and will\
