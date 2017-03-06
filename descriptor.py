@@ -14,6 +14,7 @@ group.add_argument("-l","--load",help="load previous model instead of building a
 group.add_argument("-fl","--fastload",help="load previous model instead of building a new one.", action="store_true")
 group.add_argument("-b","--build",help="build a new model.", action="store_true")
 group.add_argument("-m","--merge",help="merge the model files",action="store_true")
+group.add_argument("-p","--prune",help="prune the model file",action="store_true")
 parser.add_argument("--model_type",help="This parameter defines the type of the new model. \
                     The type is distinguished by its window type [paragraph|window|weightedwindow]",\
                     default="window")
@@ -21,14 +22,15 @@ parser.add_argument("--input",help="the path of the input directory that contain
         to cope with.")
 parser.add_argument("--descriptor",help="the path of the file that contains\
         descriptors",default="/zfs/octp/sogout/outputs/extract_desc/desc.txt")
-parser.add_argument("--title",help="the path of the file that contains film\
-        titles",default="/zfs/octp/sogout/outputs/extract_desc/movie_titles_logp.txt")
+parser.add_argument("--title",help="the path of the file that contains film titles",default="")
 parser.add_argument("--model",help="the path of the model to save or load",\
         required=True)
 parser.add_argument("--mergedir",help="the path of directory where model files were saved and will\
         be merged.",default="/home/dongxu/descriptor/model")
 parser.add_argument("--window_size",help="window size for left and right windows",type=int,default=10)
 parser.add_argument("--smooth_factor",help="smoothing factor for window weights",type=int,default=2)
+parser.add_argument("--prune_file", help="the path of output pruned model file",default="prune")
+parser.add_argument("--prune_threshold", help="the path of output pruned model file",type=float, default=1.0)
 
 
 class Descriptor:
@@ -179,6 +181,31 @@ class Descriptor:
                 result_titles.append(k)
         return result_titles
 
+    def prune(self, model_file, prune_threshold = 1.0):
+        model_dict = pickle.load(open(model_file,"rb"))
+        self.title_freq_dict = model_dict["title_freq_dict"]
+        self.desc_freq_dict = model_dict["desc_freq_dict"]
+        self.co_freq_dict = model_dict["co_freq_dict"]
+
+        title_after_prune = {}
+        for i, (desc, titles) in enumerate(self.co_freq_dict.items()):
+            for title, freq in titles.items():
+                if freq <= prune_threshold:
+                    del self.co_freq_dict[desc][title]
+                elif title not in title_after_prune:
+                    title_after_prune[title]=""
+            if len(self.co_freq_dict[desc]) == 0:
+                del self.co_freq_dict[desc]
+        
+        for i, (title, freq) in enumerate(self.title_freq_dict.items()):
+            if title not in title_after_prune:
+                del self.title_freq_dict[title]
+
+        for i, (desc, freq) in enumerate(self.desc_freq_dict.items()):
+            if desc not in self.co_freq_dict:
+                del self.desc_freq_dict[desc]
+        
+
 class DescriptorParagraph(Descriptor):
 
     def __descriptor_allmatch(self, string):
@@ -219,7 +246,7 @@ class DescriptorParagraph(Descriptor):
                 current_index += 1
         return ngram_descs 
 
-    def count_freq(self, input_file):
+    def count_freq(self, input_file, given_title = False):
         if input_file[-4:] == '.bz2':
             lines = os.popen("bunzip2 -c " + input_file).read().split("\n")
         else:
@@ -241,9 +268,11 @@ class DescriptorParagraph(Descriptor):
             history = 0
             for start, end in pattern_positions:
                 title = line[start + 1:end - 1]
-                if start < end - 2 and title in self.title_dict:
-                    matched_titles.append(title)
-                    matched_descriptors.extend(self.__descriptor_maxmatch(line[history:start]))
+                if start < end - 2:
+                    if (given_title == True and title in self.title_dict) \
+                        or given_title == False:
+                        matched_titles.append(title)
+                        matched_descriptors.extend(self.__descriptor_maxmatch(line[history:start]))
                     history = end
             matched_descriptors.extend(self.__descriptor_maxmatch(line[history:]))
             matched_titles = list(set(matched_titles))
@@ -319,7 +348,7 @@ class DescriptorWindow(Descriptor):
         for i in range(window_size):
             self.weight.append(1.0)
 
-    def count_freq(self, input_file):
+    def count_freq(self, input_file, given_title = False):
         if input_file[-4:] == '.bz2':
             lines = os.popen("bunzip2 -c " + input_file).read().split("\n")
         else:
@@ -352,7 +381,8 @@ class DescriptorWindow(Descriptor):
             for start, end in pattern_positions:
                 if start < end - 2:
                     title = line[start + 1:end - 1]
-                    if title in self.title_dict:
+                    if (given_title == True and title in self.title_dict) \
+                        or given_title == False:
                         #count frequency of titles
                         if title not in self.title_freq_dict:
                             self.title_freq_dict[title] = 1
@@ -363,6 +393,7 @@ class DescriptorWindow(Descriptor):
                         #save descriptors between the last title and current title.
                         self.__descriptor_maxmatch(line, history, start)
                         history = end
+                        
             self.__descriptor_maxmatch(line, history, len(line))
 
             #count frequency of descs
@@ -438,24 +469,38 @@ def main():
         if args.model_type == "paragraph":
             descriptor = DescriptorParagraph()
             descriptor.load_desc(desc_file)
-            descriptor.load_title(title_file)
-            descriptor.count_freq(input_file)
+            if title_file != "":
+                descriptor.load_title(title_file)
+                descriptor.count_freq(input_file, given_title = True)
+            else:
+                descriptor.count_freq(input_file, given_title = False)
             descriptor.save_model(model_file)
         elif args.model_type == "window":
             descriptor = DescriptorWindow()
             descriptor.load_desc(desc_file)
-            descriptor.load_title(title_file)
-            descriptor.set_window_weight(args.window_size)
-            descriptor.count_freq(input_file)
+            if title_file != "":
+                descriptor.load_title(title_file)
+                descriptor.set_window_weight(args.window_size)
+                descriptor.count_freq(input_file, given_title = True)
+            else:
+                descriptor.set_window_weight(args.window_size)
+                descriptor.count_freq(input_file, given_title = False)
             descriptor.save_model(model_file)
         elif args.model_type == "weightedwindow":
             descriptor = DescriptorWeightedWindow()
             descriptor.load_desc(desc_file)
-            descriptor.load_title(title_file)
-            descriptor.set_window_weight(args.window_size, args.smooth_factor)
-            descriptor.count_freq(input_file)
+            if title_file != "":
+                descriptor.load_title(title_file)
+                descriptor.set_window_weight(args.window_size, args.smooth_factor)
+                descriptor.count_freq(input_file, given_title = True)
+            else:
+                descriptor.set_window_weight(args.window_size, args.smooth_factor)
+                descriptor.count_freq(input_file, given_title = False)
             descriptor.save_model(model_file)
-            
+    elif args.prune:
+        descriptor = Descriptor()
+        descriptor.prune(args.model, prune_threshold = args.prune_threshold)
+        descriptor.save_model(args.prune_file)
     elif args.merge:
         output_model_file = args.model
         merge_dir = args.mergedir
