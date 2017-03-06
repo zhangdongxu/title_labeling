@@ -15,6 +15,7 @@ group.add_argument("-fl","--fastload",help="load previous model instead of build
 group.add_argument("-b","--build",help="build a new model.", action="store_true")
 group.add_argument("-m","--merge",help="merge the model files",action="store_true")
 group.add_argument("-p","--prune",help="prune the model file",action="store_true")
+group.add_argument("-e","--evaluate",help="evaluate a model with a ranking strategy",action="store_true")
 parser.add_argument("--model_type",help="This parameter defines the type of the new model. \
                     The type is distinguished by its window type [paragraph|window|weightedwindow]",\
                     default="window")
@@ -32,6 +33,8 @@ parser.add_argument("--window_size",help="window size for left and right windows
 parser.add_argument("--smooth_factor",help="smoothing factor for window weights",type=int,default=2)
 parser.add_argument("--prune_file", help="the path of output pruned model file",default="prune")
 parser.add_argument("--prune_threshold", help="the path of output pruned model file",type=float, default=1.0)
+parser.add_argument("--testset",help="testset for evaluation",default="")
+parser.add_argument("--rank_method",help="rank method for evaluation. [raw|bm25]",default="raw")
 
 
 class Descriptor:
@@ -41,6 +44,8 @@ class Descriptor:
         self.title_freq_dict = {}
         self.desc_freq_dict = {}
         self.pattern = re.compile("《(.*?)》".decode('utf-8'))
+        self.ranking_methods = {'raw': (self.load_model, self.rank_titles), \
+                                'bm25': (self.load_model_bm25, self.rank_titles_bm25)}
 
     def list_dir(self, rootdir): 
         """List all file paths inside a given directory (recursively)"""
@@ -138,6 +143,30 @@ class Descriptor:
             for title in titles:
                 self.co_freq_devide_title[desc][title] /= self.title_sqrt_dict[title]
 
+    def load_model_bm25(self, model_file, k1 = 1.2, b = 0.75):
+        model_dict = pickle.load(open(model_file,"rb"))
+        self.title_freq_dict = model_dict["title_freq_dict"]
+        self.desc_freq_dict = model_dict["desc_freq_dict"]
+        self.co_freq_dict = model_dict["co_freq_dict"]
+
+        number_of_titles = len(self.title_freq_dict)
+        avg_title_freq = 0
+        for title, freq in self.title_freq_dict.items():
+            avg_title_freq += freq
+        avg_title_freq /= float(number_of_titles)
+
+        self.desc_idf = {}
+        for desc, titles in self.co_freq_dict.items():
+            self.desc_idf[desc] = math.log((number_of_titles - len(titles) + 0.5)/(len(titles) + 0.5))
+        self.title_K = {}
+        for title, freq in self.title_freq_dict.items():
+            self.title_K[title] = k1 * (1 - b + b * freq / avg_title_freq)
+
+    def load_testset(self, testset):
+        self.test_dict = pickle.load(open(testset, "rb"))
+        for i, (desc, titles) in enumerate(self.test_dict.items()):
+            self.test_dict[desc] = set(titles)
+
     def match_desc(self, string):
         ngram_descs = []
         string_length = len(string)
@@ -182,6 +211,32 @@ class Descriptor:
                 result_titles.append(k)
         return result_titles
 
+    def rank_titles_bm25(self, ngram_descs, topk, k1=1.2, b=0.75):
+        result_titles = []
+        if len(ngram_descs) == 0:
+            print "描述词未出现"
+            for k,v in sorted(self.title_freq_dict.items(), \
+                        lambda x, y: cmp(x[1], y[1]), reverse=True)[:topk]:
+                result_titles.append(k)
+
+        else:
+            self.desc_idf
+            self.title_K
+
+            title_scores = {}
+            for desc in ngram_descs:
+                if desc in self.co_freq_dict:
+                    for title, freq in self.co_freq_dict[desc].items():
+                        if title not in title_scores:
+                            title_scores[title] = self.desc_idf[desc] * freq * (k1 + 1) / (freq + self.title_K[title])
+                        else:
+                            title_scores[title] += self.desc_idf[desc] * freq * (k1 + 1) / (freq + self.title_K[title])
+            
+            for k,v in sorted(title_scores.items(), \
+                        lambda x, y: cmp(x[1], y[1]), reverse=True)[:topk]:
+                result_titles.append(k)
+        return result_titles
+
     def prune(self, model_file, prune_threshold = 1.0):
         model_dict = pickle.load(open(model_file,"rb"))
         self.title_freq_dict = model_dict["title_freq_dict"]
@@ -206,6 +261,25 @@ class Descriptor:
             if desc not in self.co_freq_dict:
                 del self.desc_freq_dict[desc]
         
+    def evaluate(self, model_file, method = 'raw', topk = 10):
+        load_data = self.ranking_methods[method][0]
+        ranking = self.ranking_methods[method][1]
+        load_data(model_file)
+        print "data loaded"
+        average_good_proportion = 0
+        for desc, titles in self.test_dict.items():
+            if desc not in self.co_freq_dict:
+                #print desc
+                continue
+            #print "ranking " + desc
+            result_titles = ranking([desc], topk)
+            for title in result_titles:
+                if title in titles:
+                    average_good_proportion += 1
+                    break
+                
+        average_good_proportion /= float(len(self.test_dict))
+        print "average top" +str(topk) + " hit rate= " + str(average_good_proportion)
 
 class DescriptorParagraph(Descriptor):
 
@@ -498,15 +572,22 @@ def main():
                 descriptor.set_window_weight(args.window_size, args.smooth_factor)
                 descriptor.count_freq(input_file, given_title = False)
             descriptor.save_model(model_file)
+
     elif args.prune:
         descriptor = Descriptor()
         descriptor.prune(args.model, prune_threshold = args.prune_threshold)
         descriptor.save_model(args.prune_file)
+
     elif args.merge:
         output_model_file = args.model
         merge_dir = args.mergedir
         descriptor = Descriptor()
         descriptor.merge_model(merge_dir, output_model_file)
+
+    elif args.evaluate:
+        descriptor = Descriptor()
+        descriptor.load_testset(args.testset)
+        descriptor.evaluate(args.model, args.rank_method, 1)
 
     elif args.fastload:
         descriptor = Descriptor()
@@ -532,6 +613,7 @@ def main():
                         print title
             elif act == "exit":
                 break
+
     elif args.load:
         model_file = args.model
         model_dict = pickle.load(open(model_file,"rb"))
