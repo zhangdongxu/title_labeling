@@ -33,11 +33,14 @@ When the service started, it requires users' queries and returns a list of movie
 
    ```shell
    #help
-   python descriptor.py -h
+   python descriptor.py --help
 
    #build a model with a single corpus file input
    python descriptor.py -b --model_type weightedwindow --window_size window_size --smooth_factor smooth_factor --input your_input_file --descriptor your_desc_file --title your_title_file  --model output_model_path
-
+   
+   #prune a model with given threshold and model file
+   python descriptor.py -p --prune_threshold 1.0 --model input_model_path --prune_file output_pruned_model_path
+   
    #merge models you previously built
    python descriptor.py -m --mergedir output_model_directory --model output_model_path 
 
