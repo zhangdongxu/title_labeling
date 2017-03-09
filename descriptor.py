@@ -45,7 +45,8 @@ class Descriptor:
         self.desc_freq_dict = {}
         self.pattern = re.compile("《(.*?)》".decode('utf-8'))
         self.ranking_methods = {'raw': (self.load_model, self.rank_titles), \
-                                'bm25': (self.load_model_bm25, self.rank_titles_bm25)}
+                                'bm25': (self.load_model_bm25, self.rank_titles_bm25), \
+                                'and': (self.load_model_and, self.rank_titles_and)}
 
     def list_dir(self, rootdir): 
         """List all file paths inside a given directory (recursively)"""
@@ -162,6 +163,21 @@ class Descriptor:
         for title, freq in self.title_freq_dict.items():
             self.title_K[title] = k1 * (1 - b + b * freq / avg_title_freq)
 
+    def load_model_and(self, model_file):
+        model_dict = pickle.load(open(model_file,"rb"))
+        self.title_freq_dict = model_dict["title_freq_dict"]
+        self.desc_freq_dict = model_dict["desc_freq_dict"]
+        self.co_freq_dict = model_dict["co_freq_dict"]
+
+        self.title_sqrt_dict = copy.deepcopy(self.title_freq_dict)
+        for title in self.title_sqrt_dict:
+            self.title_sqrt_dict[title] = math.sqrt(float(self.title_sqrt_dict[title]))
+        self.co_freq_devide_title = copy.deepcopy(self.co_freq_dict)
+        for desc, titles in self.co_freq_devide_title.items():
+            for title in titles:
+                self.co_freq_devide_title[desc][title] = math.log((self.co_freq_devide_title[desc][title] + 1)/self.title_sqrt_dict[title])
+        self.score_not_appear = math.log(1 / max([value for title, value in self.title_sqrt_dict.items()]))
+
     def load_testset(self, testset):
         self.test_dict = pickle.load(open(testset, "rb"))
         for i, (desc, titles) in enumerate(self.test_dict.items()):
@@ -173,15 +189,15 @@ class Descriptor:
         current_index = 0
         while(current_index < string_length):
             if current_index + 4 <= string_length and \
-               string[current_index:current_index + 4] in self.co_freq_devide_title:
+               string[current_index:current_index + 4] in self.co_freq_dict:
                 ngram_descs.append(string[current_index:current_index + 4])
                 current_index += 4
             elif current_index + 3 <= string_length and \
-               string[current_index:current_index + 3] in self.co_freq_devide_title:
+               string[current_index:current_index + 3] in self.co_freq_dict:
                 ngram_descs.append(string[current_index:current_index + 3])
                 current_index += 3 
             elif current_index + 2 <= string_length and \
-               string[current_index:current_index + 2] in self.co_freq_devide_title:
+               string[current_index:current_index + 2] in self.co_freq_dict:
                 ngram_descs.append(string[current_index:current_index + 2])
                 current_index += 2
             else:
@@ -231,6 +247,34 @@ class Descriptor:
                             title_scores[title] = self.desc_idf[desc] * freq * (k1 + 1) / (freq + self.title_K[title])
                         else:
                             title_scores[title] += self.desc_idf[desc] * freq * (k1 + 1) / (freq + self.title_K[title])
+            
+            for k,v in sorted(title_scores.items(), \
+                        lambda x, y: cmp(x[1], y[1]), reverse=True)[:topk]:
+                result_titles.append(k)
+        return result_titles
+
+    def rank_titles_and(self, ngram_descs, topk):
+        result_titles = []
+        if len(ngram_descs) == 0:
+            print "描述词未出现"
+            for k,v in sorted(self.title_freq_dict.items(), \
+                        lambda x, y: cmp(x[1], y[1]), reverse=True)[:topk]:
+                result_titles.append(k)
+
+        else:
+            title_scores = {}
+            for desc in ngram_descs:
+                if desc in self.co_freq_devide_title:
+                    for title, score in self.co_freq_devide_title[desc].items():
+                        if title not in title_scores:
+                            title_scores[title] = [score, 1]
+                        else:
+                            title_scores[title][0] += score
+                            title_scores[title][1] += 1
+            #max_num_desc = max([len(scores) for title, scores in title_scores.items()])
+            max_num_desc = max([score[1] for title, score in title_scores.items()])
+            for i, (title, score) in enumerate(title_scores.items()):
+                title_scores[title] = score[0] + (max_num_desc - score[1]) * self.score_not_appear
             
             for k,v in sorted(title_scores.items(), \
                         lambda x, y: cmp(x[1], y[1]), reverse=True)[:topk]:
@@ -591,11 +635,16 @@ def main():
 
     elif args.fastload:
         descriptor = Descriptor()
-        descriptor.load_model(args.model)
+        load_model = descriptor.ranking_methods[args.rank_method][0]
+        ranking = descriptor.ranking_methods[args.rank_method][1]
+        load_model(args.model)
         
         while(1):
             print "输入描述[d] or 退出[exit]：[d/exit]"
-            act = raw_input().decode('utf-8')
+            try:
+                act = raw_input().decode('utf-8')
+            except:
+                act = raw_input()
             if act == "d":
                 print "请输入描述："
                 try:
@@ -604,7 +653,7 @@ def main():
                     string = raw_input()
 
                 ngram_descs = descriptor.match_desc(string)
-                titles = descriptor.rank_titles(ngram_descs, 10)
+                titles = ranking(ngram_descs, 30)
                 print "——————————————————————"
                 for title in titles:
                     try:
