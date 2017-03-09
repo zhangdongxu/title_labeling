@@ -45,7 +45,7 @@ When the service started, it requires users' queries and returns a list of movie
    python descriptor.py -m --mergedir output_model_directory --model output_model_path 
 
    #load a model and look at rankings in a interactive mode
-   python descriptor.py -fl --model model_path_you_want_to_load 
+   python descriptor.py -fl --model model_path_you_want_to_load --rank_method and
    python descriptor.py -l --model model_path_you_want_to_load 
 
    #load a model and evaluate it with a evaluation set and a ranking method
