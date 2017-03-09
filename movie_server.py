@@ -33,7 +33,7 @@ class movieServicer(movie_pb2_grpc.FindMovieServiceServicer):
         return movie_pb2.FindMovieReply(movies=movies)
 
 def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=50))
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     movie_pb2.add_FindMovieServiceServicer_to_server(movieServicer(), server)
     server.add_insecure_port(args.address)
     server.start()
