@@ -61,7 +61,7 @@ class Descriptor:
 
     def load_desc(self, desc_file):
         descriptors = open(desc_file).read().decode('utf-8').split('\n')
-        for i in range(len(descriptors)):
+        for i in xrange(len(descriptors)):
             descriptors[i] = "".join(descriptors[i].split())
         desc_dict = {}#dict is faster than set or list
         for d in descriptors:
@@ -73,7 +73,7 @@ class Descriptor:
 
     def load_title(self, title_file):
         titles=open(title_file).read().decode('utf-8').split('\n')[:-1]
-        for i in range(len(titles)):
+        for i in xrange(len(titles)):
             titles[i] = titles[i].split()[0]
         title_dict = {}#title is faster than set or list
         for t in titles:
@@ -96,7 +96,7 @@ class Descriptor:
         model_dict = {"co_freq_dict":self.co_freq_dict, \
                       "title_freq_dict":self.title_freq_dict, \
                       "desc_freq_dict":self.desc_freq_dict}
-        pickle.dump(model_dict, open(model_file + ".p","wb"))
+        pickle.dump(model_dict, open(model_file + ".p","wb"), protocol=2)
 
     def merge_model(self, merge_dir, output_model_file):
         print "start merging..."
@@ -331,15 +331,15 @@ class DescriptorParagraph(Descriptor):
         ngram_descs = []
         string_length = len(string)
         if string_length >= 2:
-            for i in range(string_length - 1):
+            for i in xrange(string_length - 1):
                 if string[i:i + 2] in self.desc_dict:
                     ngram_descs.append(string[i:i + 2])
         if string_length >= 3:
-            for i in range(string_length - 2):
+            for i in xrange(string_length - 2):
                 if string[i:i + 3] in self.desc_dict:
                     ngram_descs.append(string[i:i + 3])
         if string_length >= 4:
-            for i in range(string_length - 3):
+            for i in xrange(string_length - 3):
                 if string[i:i + 4] in self.desc_dict:
                     ngram_descs.append(string[i:i + 4])
         return ngram_descs
@@ -423,19 +423,19 @@ class DescriptorWindow(Descriptor):
         length = end - start
         #2gram
         if length >= 2:
-            for i in range(start, end - 1):
+            for i in xrange(start, end - 1):
                 if string[i:i + 2] in self.desc_dict:
                     self.index_desc_start[i].append(string[i:i + 2])
                     self.index_desc_end[i + 1].append(string[i:i + 2])
         #3gram
         if length >= 3:
-            for i in range(start, end - 2):
+            for i in xrange(start, end - 2):
                 if string[i:i + 3] in self.desc_dict:
                     self.index_desc_start[i].append(string[i:i + 3])
                     self.index_desc_end[i + 2].append(string[i:i + 3])
         #4gram
         if length >= 4:
-            for i in range(start, end - 3):
+            for i in xrange(start, end - 3):
                 if string[i:i + 4] in self.desc_dict:
                     self.index_desc_start[i].append(string[i:i + 4])
                     self.index_desc_end[i + 3].append(string[i:i + 4])
@@ -464,7 +464,7 @@ class DescriptorWindow(Descriptor):
     def set_window_weight(self, window_size):
         self.weight = []
         self.window_size = window_size
-        for i in range(window_size):
+        for i in xrange(window_size):
             self.weight.append(1.0)
 
     def count_freq(self, input_file, given_title = False):
@@ -492,7 +492,7 @@ class DescriptorWindow(Descriptor):
             self.index_desc_end = {}
                                  # save descriptors in this line by its end position index
                                  # key=index, value=list of descriptors
-            for i in range(len(line)):
+            for i in xrange(len(line)):
                 self.index_desc_start[i] = []
                 self.index_desc_end[i] = []
             # 
@@ -543,7 +543,7 @@ class DescriptorWindow(Descriptor):
                 title = line[start + 1:end - 1]
 
                 #left window
-                for index in range(left_window[0], left_window[1]):
+                for index in xrange(left_window[0], left_window[1]):
                     dist = left_window[1] - index
                     for desc in self.index_desc_start[index]:
                         dist = dist - len(desc)#minimum distance, start from zero
@@ -555,7 +555,7 @@ class DescriptorWindow(Descriptor):
                             else:
                                 self.co_freq_dict[desc][title] += self.weight[dist]
                 #right window
-                for index in range(right_window[0], right_window[1]):
+                for index in xrange(right_window[0], right_window[1]):
                     dist = index - right_window[0] + 1
                     for desc in self.index_desc_end[index]:
                         dist = dist - len(desc)#minimum distance, start from zero   
@@ -573,7 +573,7 @@ class DescriptorWeightedWindow(DescriptorWindow):
     def set_window_weight(self, window_size, sf):
         self.weight = []
         self.window_size = window_size
-        for i in range(window_size):
+        for i in xrange(window_size):
             self.weight.append(float(sf)/(sf + 1 + i))
 
 
