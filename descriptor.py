@@ -34,7 +34,7 @@ parser.add_argument("--smooth_factor",help="smoothing factor for window weights"
 parser.add_argument("--prune_file", help="the path of output pruned model file",default="prune")
 parser.add_argument("--prune_threshold", help="the path of output pruned model file",type=float, default=1.0)
 parser.add_argument("--testset",help="testset for evaluation",default="")
-parser.add_argument("--rank_method",help="rank method for evaluation. [raw|bm25]",default="raw")
+parser.add_argument("--rank_method",help="rank method for evaluation. [and|raw|bm25]",default="and")
 
 
 class Descriptor:
