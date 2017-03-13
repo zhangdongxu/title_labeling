@@ -34,8 +34,9 @@ parser.add_argument("--smooth_factor",help="smoothing factor for window weights"
 parser.add_argument("--prune_file", help="the path of output pruned model file",default="prune")
 parser.add_argument("--prune_threshold", help="the path of output pruned model file",type=float, default=1.0)
 parser.add_argument("--testset",help="testset for evaluation",default="")
-parser.add_argument("--rank_method",help="rank method for evaluation. [and|raw|bm25]",default="and")
-
+parser.add_argument("--score_method",help="rank method for evaluation. [and|raw|bm25]",default="and")
+parser.add_argument("--topk", help="set top k value for ranking", type=int, default=10)
+parser.add_argument("--partial_rank", help="this flag is useful to speed up ranking for service", action="store_true")
 
 class Descriptor:
 
@@ -198,7 +199,14 @@ class Descriptor:
                 current_index += 1
         return ngram_descs
 
-    def rank_titles(self, ngram_descs, topk):
+    def bubble_sort_descent(self, dict_list, topk):
+        for i in xrange(topk):
+            for j in xrange(len(dict_list) - 1, i, -1):
+                if dict_list[j][1] > dict_list[j - 1][1]:
+                    dict_list[j], dict_list[j - 1] = dict_list[j - 1], dict_list[j]
+        return dict_list[:topk]
+
+    def rank_titles(self, ngram_descs, topk, partial_rank = False):
         result_titles = []
         if len(ngram_descs) == 0:
             print "描述词未出现"
@@ -216,12 +224,16 @@ class Descriptor:
                         else:
                             title_scores[title] += score
             
-            for k,v in sorted(title_scores.items(), \
+            if partial_rank == True:
+                for k, v in self.bubble_sort_descent(title_scores.items(), topk):
+                    result_titles.append(k)
+            else:
+                for k, v in sorted(title_scores.items(), \
                         lambda x, y: cmp(x[1], y[1]), reverse=True)[:topk]:
-                result_titles.append(k)
+                    result_titles.append(k)
         return result_titles
 
-    def rank_titles_bm25(self, ngram_descs, topk, k1=1.2, b=0.75):
+    def rank_titles_bm25(self, ngram_descs, topk, k1=1.2, b=0.75, partial_rank = False):
         result_titles = []
         if len(ngram_descs) == 0:
             print "描述词未出现"
@@ -242,12 +254,16 @@ class Descriptor:
                         else:
                             title_scores[title] += self.desc_idf[desc] * freq * (k1 + 1) / (freq + self.title_K[title])
             
-            for k,v in sorted(title_scores.items(), \
+            if partial_rank == True:
+                for k, v in self.bubble_sort_descent(title_scores.items(), topk):
+                    result_titles.append(k)
+            else:
+                for k, v in sorted(title_scores.items(), \
                         lambda x, y: cmp(x[1], y[1]), reverse=True)[:topk]:
-                result_titles.append(k)
+                    result_titles.append(k)
         return result_titles
 
-    def rank_titles_and(self, ngram_descs, topk):
+    def rank_titles_and(self, ngram_descs, topk, partial_rank = False):
         result_titles = []
         if len(ngram_descs) == 0:
             print "描述词未出现"
@@ -265,14 +281,16 @@ class Descriptor:
                         else:
                             title_scores[title][0] += score
                             title_scores[title][1] += 1
-            #max_num_desc = max([len(scores) for title, scores in title_scores.items()])
             max_num_desc = max([score[1] for title, score in title_scores.items()])
             for i, (title, score) in enumerate(title_scores.items()):
                 title_scores[title] = score[0] + (max_num_desc - score[1]) * self.score_not_appear
-            
-            for k,v in sorted(title_scores.items(), \
+            if partial_rank == True:
+                for k, v in self.bubble_sort_descent(title_scores.items(), topk):
+                    result_titles.append(k)
+            else:
+                for k, v in sorted(title_scores.items(), \
                         lambda x, y: cmp(x[1], y[1]), reverse=True)[:topk]:
-                result_titles.append(k)
+                    result_titles.append(k)
         return result_titles
 
     def prune(self, model_file, prune_threshold = 1.0):
@@ -299,7 +317,7 @@ class Descriptor:
             if desc not in self.co_freq_dict:
                 del self.desc_freq_dict[desc]
         
-    def evaluate(self, model_file, method = 'raw', topk = 10):
+    def evaluate(self, model_file, method = 'raw', topk = 10, partial_rank = False):
         load_data = self.ranking_methods[method][0]
         ranking = self.ranking_methods[method][1]
         load_data(model_file)
@@ -310,7 +328,7 @@ class Descriptor:
                 #print desc
                 continue
             #print "ranking " + desc
-            result_titles = ranking([desc], topk)
+            result_titles = ranking([desc], topk, partial_rank)
             for title in result_titles:
                 if title in titles:
                     average_good_proportion += 1
@@ -625,12 +643,12 @@ def main():
     elif args.evaluate:
         descriptor = Descriptor()
         descriptor.load_testset(args.testset)
-        descriptor.evaluate(args.model, args.rank_method, 1)
+        descriptor.evaluate(args.model, args.score_method, args.topk, partial_rank = args.partial_rank)
 
     elif args.fastload:
         descriptor = Descriptor()
-        load_model = descriptor.ranking_methods[args.rank_method][0]
-        ranking = descriptor.ranking_methods[args.rank_method][1]
+        load_model = descriptor.ranking_methods[args.score_method][0]
+        ranking = descriptor.ranking_methods[args.score_method][1]
         load_model(args.model)
         
         while(1):
@@ -647,7 +665,7 @@ def main():
                     string = raw_input()
 
                 ngram_descs = descriptor.match_desc(string)
-                titles = ranking(ngram_descs, 30)
+                titles = ranking(ngram_descs, args.topk, partial_rank = args.partial_rank)
                 print "——————————————————————"
                 for title in titles:
                     try:
@@ -698,7 +716,7 @@ def main():
                 print "——————————————————————"
                 print "descriptor\tco_freq/desc_freq\tco_freq\tdesc_freq"
                 for k,v in sorted(cofreq_devide_desc[title].items(), lambda x, y: cmp(x[1],\
-                   y[1]), reverse=True)[:30]:
+                   y[1]), reverse=True)[:args.topk]:
                     try:
                         print (k + "\t" + str(v) + "\t" + str(model_dict["co_freq_dict"][k][title])\
                                 + "\t" + str(model_dict["desc_freq_dict"][k])).encode('utf-8')
@@ -718,7 +736,7 @@ def main():
                 print "——————————————————————"
                 print "title\tco_freq/sqrt(title_freq)\tco_freq\ttitle_freq"
                 for k,v in sorted(cofreq_devide_title[desc].items(), lambda x, y: cmp(x[1], y[1]),\
-                        reverse=True)[:30]:
+                        reverse=True)[:topk]:
                     try:
                         print (k + "\t" + str(v) + "\t" + str(model_dict["co_freq_dict"][desc][k]) +\
                                 "\t" + str(model_dict["title_freq_dict"][k])).encode('utf-8')

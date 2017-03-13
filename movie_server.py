@@ -12,6 +12,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--model",help="the path of the model to save or load",\
         required=True)
 parser.add_argument("--address", help="the ip and port this service want to listen", default="[::]:5011")
+parser.add_argument("--topk", help="top k", type=int, default=10)
 args = parser.parse_args()
 descriptor = Descriptor()
 descriptor.load_model_and(args.model)
@@ -25,7 +26,7 @@ class movieServicer(movie_pb2_grpc.FindMovieServiceServicer):
         print (time.strftime('%Y-%m-%d/%H:%M:%S', time.localtime(time.time())) + '\t' + query).encode('utf-8')
         sys.stdout.flush()
         ngram_desc = descriptor.match_desc(query)
-        titles = descriptor.rank_titles_and(ngram_desc, 10)
+        titles = descriptor.rank_titles_and(ngram_desc, args.topk, partial_rank = True)
         try:
             movies = [title.encode('utf-8') for title in titles]
         except:
