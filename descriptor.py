@@ -63,24 +63,18 @@ class Descriptor:
         descriptors = open(desc_file).read().decode('utf-8').split('\n')
         for i in xrange(len(descriptors)):
             descriptors[i] = "".join(descriptors[i].split())
-        desc_dict = {}#dict is faster than set or list
-        for d in descriptors:
-            if d not in desc_dict:
-                desc_dict[d] = 1
+        desc_set = set(descriptors)
         
         print str(len(descriptors)) + " descriptors loaded."
-        self.desc_dict = desc_dict
+        self.desc_set = desc_set
 
     def load_title(self, title_file):
         titles=open(title_file).read().decode('utf-8').split('\n')[:-1]
         for i in xrange(len(titles)):
             titles[i] = titles[i].split()[0]
-        title_dict = {}#title is faster than set or list
-        for t in titles:
-            if t not in title_dict:
-                title_dict[t] = 1
+        title_set = set(titles)
         print str(len(titles)) + " title names loaded."
-        self.title_dict = title_dict
+        self.title_set = title_set
 
     def match_pattern_in_line(self, line):
         iterator = self.pattern.finditer(line)
@@ -332,15 +326,15 @@ class DescriptorParagraph(Descriptor):
         string_length = len(string)
         if string_length >= 2:
             for i in xrange(string_length - 1):
-                if string[i:i + 2] in self.desc_dict:
+                if string[i:i + 2] in self.desc_set:
                     ngram_descs.append(string[i:i + 2])
         if string_length >= 3:
             for i in xrange(string_length - 2):
-                if string[i:i + 3] in self.desc_dict:
+                if string[i:i + 3] in self.desc_set:
                     ngram_descs.append(string[i:i + 3])
         if string_length >= 4:
             for i in xrange(string_length - 3):
-                if string[i:i + 4] in self.desc_dict:
+                if string[i:i + 4] in self.desc_set:
                     ngram_descs.append(string[i:i + 4])
         return ngram_descs
 
@@ -350,15 +344,15 @@ class DescriptorParagraph(Descriptor):
         current_index = 0
         while(current_index < string_length):
             if current_index + 4 <= string_length and \
-               string[current_index:current_index + 4] in self.desc_dict:
+               string[current_index:current_index + 4] in self.desc_set:
                 ngram_descs.append(string[current_index:current_index + 4])
                 current_index += 4
             elif current_index + 3 <= string_length and \
-               string[current_index:current_index + 3] in self.desc_dict:
+               string[current_index:current_index + 3] in self.desc_set:
                 ngram_descs.append(string[current_index:current_index + 3])
                 current_index += 3 
             elif current_index + 2 <= string_length and \
-               string[current_index:current_index + 2] in self.desc_dict:
+               string[current_index:current_index + 2] in self.desc_set:
                 ngram_descs.append(string[current_index:current_index + 2])
                 current_index += 2
             else:
@@ -388,7 +382,7 @@ class DescriptorParagraph(Descriptor):
             for start, end in pattern_positions:
                 title = line[start + 1:end - 1]
                 if start < end - 2:
-                    if (given_title == True and title in self.title_dict) \
+                    if (given_title == True and title in self.title_set) \
                         or given_title == False:
                         matched_titles.append(title)
                         matched_descriptors.extend(self.__descriptor_maxmatch(line[history:start]))
@@ -424,19 +418,19 @@ class DescriptorWindow(Descriptor):
         #2gram
         if length >= 2:
             for i in xrange(start, end - 1):
-                if string[i:i + 2] in self.desc_dict:
+                if string[i:i + 2] in self.desc_set:
                     self.index_desc_start[i].append(string[i:i + 2])
                     self.index_desc_end[i + 1].append(string[i:i + 2])
         #3gram
         if length >= 3:
             for i in xrange(start, end - 2):
-                if string[i:i + 3] in self.desc_dict:
+                if string[i:i + 3] in self.desc_set:
                     self.index_desc_start[i].append(string[i:i + 3])
                     self.index_desc_end[i + 2].append(string[i:i + 3])
         #4gram
         if length >= 4:
             for i in xrange(start, end - 3):
-                if string[i:i + 4] in self.desc_dict:
+                if string[i:i + 4] in self.desc_set:
                     self.index_desc_start[i].append(string[i:i + 4])
                     self.index_desc_end[i + 3].append(string[i:i + 4])
 
@@ -444,17 +438,17 @@ class DescriptorWindow(Descriptor):
         current_index = start
         while(current_index < end):
             if current_index + 3 < end and \
-               string[current_index:current_index + 4] in self.desc_dict:
+               string[current_index:current_index + 4] in self.desc_set:
                 self.index_desc_start[current_index].append(string[current_index:current_index + 4])
                 self.index_desc_end[current_index + 3].append(string[current_index:current_index + 4])
                 current_index += 4
             elif current_index + 2 < end and \
-               string[current_index:current_index + 3] in self.desc_dict:
+               string[current_index:current_index + 3] in self.desc_set:
                 self.index_desc_start[current_index].append(string[current_index:current_index + 3])
                 self.index_desc_end[current_index + 2].append(string[current_index:current_index + 3])
                 current_index += 3
             elif current_index + 1 < end and \
-               string[current_index:current_index + 2] in self.desc_dict:
+               string[current_index:current_index + 2] in self.desc_set:
                 self.index_desc_start[current_index].append(string[current_index:current_index + 2])
                 self.index_desc_end[current_index + 1].append(string[current_index:current_index + 2])
                 current_index += 2
@@ -500,7 +494,7 @@ class DescriptorWindow(Descriptor):
             for start, end in pattern_positions:
                 if start < end - 2:
                     title = line[start + 1:end - 1]
-                    if (given_title == True and title in self.title_dict) \
+                    if (given_title == True and title in self.title_set) \
                         or given_title == False:
                         #count frequency of titles
                         if title not in self.title_freq_dict:
