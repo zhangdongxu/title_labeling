@@ -9,13 +9,15 @@ import sys
 
 parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group(required=True)
-group.add_argument("-l","--load",help="load previous model instead of building a new one and \
-                                       also transform the co-occurrence dict", action="store_true")
-group.add_argument("-fl","--fastload",help="load previous model instead of building a new one.", action="store_true")
-group.add_argument("-b","--build",help="build a new model.", action="store_true")
-group.add_argument("-m","--merge",help="merge the model files",action="store_true")
-group.add_argument("-p","--prune",help="prune the model file",action="store_true")
-group.add_argument("-e","--evaluate",help="evaluate a model with a ranking strategy",action="store_true")
+group.add_argument("-l","--load",help="loads previous model instead of building a new one and \
+                                       also transforms the co-occurrence dict. This mode lets you\
+                                       check both title ranking and desc ranking", action="store_true")
+group.add_argument("-fl","--fastload",help="loads previous model instead of building a new one, \
+                                            this mode simulates the server's action.", action="store_true")
+group.add_argument("-b","--build",help="builds a new model.", action="store_true")
+group.add_argument("-m","--merge",help="merges the model files",action="store_true")
+group.add_argument("-p","--prune",help="prunes the model file",action="store_true")
+group.add_argument("-e","--evaluate",help="evaluates a model with a ranking strategy",action="store_true")
 parser.add_argument("--model_type",help="This parameter defines the type of the new model. \
                     The type is distinguished by its window type [paragraph|window|weightedwindow]",\
                     default="window")
@@ -34,8 +36,8 @@ parser.add_argument("--smooth_factor",help="smoothing factor for window weights"
 parser.add_argument("--prune_file", help="the path of output pruned model file",default="prune")
 parser.add_argument("--prune_threshold", help="the path of output pruned model file",type=float, default=1.0)
 parser.add_argument("--testset",help="testset for evaluation",default="")
-parser.add_argument("--score_method",help="rank method for evaluation. [and|raw|bm25]",default="and")
-parser.add_argument("--topk", help="set top k value for ranking", type=int, default=10)
+parser.add_argument("--score_method",help="scoring method for evaluation and fastload. [and|raw|bm25]",default="and")
+parser.add_argument("--topk", help="sets top k value for ranking", type=int, default=10)
 parser.add_argument("--partial_rank", help="this flag is useful to speed up ranking for service", action="store_true")
 
 class Descriptor:
