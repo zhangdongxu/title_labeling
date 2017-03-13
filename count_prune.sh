@@ -48,4 +48,4 @@ python descriptor.py -p --prune_threshold $prune_threshold --model $workdir/mode
 
 done
 
-python descriptor_onlyusebrackets.py -m --mergedir $workdir/model/$modelname.prune --model $workdir/model/$modelname.prune
+python descriptor.py -m --mergedir $workdir/model/$modelname.prune --model $workdir/model/$modelname.prune
