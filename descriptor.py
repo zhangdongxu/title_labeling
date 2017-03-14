@@ -47,7 +47,7 @@ class Descriptor:
         self.title_freq_dict = {}
         self.desc_freq_dict = {}
         self.pattern = re.compile("《(.*?)》".decode('utf-8'))
-        self.ranking_methods = {'raw': (self.load_model, self.rank_titles), \
+        self.score_methods = {'raw': (self.load_model, self.rank_titles), \
                                 'bm25': (self.load_model_bm25, self.rank_titles_bm25), \
                                 'and': (self.load_model_and, self.rank_titles_and)}
 
@@ -320,8 +320,8 @@ class Descriptor:
                 del self.desc_freq_dict[desc]
         
     def evaluate(self, model_file, method = 'raw', topk = 10, partial_rank = False):
-        load_data = self.ranking_methods[method][0]
-        ranking = self.ranking_methods[method][1]
+        load_data = self.score_methods[method][0]
+        ranking = self.score_methods[method][1]
         load_data(model_file)
         print "data loaded"
         average_good_proportion = 0
@@ -649,8 +649,8 @@ def main():
 
     elif args.fastload:
         descriptor = Descriptor()
-        load_model = descriptor.ranking_methods[args.score_method][0]
-        ranking = descriptor.ranking_methods[args.score_method][1]
+        load_model = descriptor.score_methods[args.score_method][0]
+        ranking = descriptor.score_methods[args.score_method][1]
         load_model(args.model)
         
         while(1):
