@@ -210,7 +210,8 @@ class Descriptor:
         self.co_freq_devide_title = copy.deepcopy(self.co_freq_dict)
         for desc, titles in self.co_freq_devide_title.items():
             for title in titles:
-                self.co_freq_devide_title[desc][title] = math.log((self.co_freq_devide_title[desc][title] + 1)/self.title_sqrt_dict[title])
+                self.co_freq_devide_title[desc][title] = math.log((self.co_freq_devide_title[desc][title] + 1) \ 
+                                                                  /self.title_sqrt_dict[title])
         self.score_not_appear = math.log(1 / max([value for title, value in self.title_sqrt_dict.items()]))
 
     def load_testset(self, testset):
