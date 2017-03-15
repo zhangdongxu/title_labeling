@@ -816,7 +816,7 @@ def main():
                 print "——————————————————————"
                 print "title\tco_freq/sqrt(title_freq)\tco_freq\ttitle_freq"
                 for k,v in sorted(cofreq_devide_title[desc].items(), lambda x, y: cmp(x[1], y[1]),\
-                        reverse=True)[:topk]:
+                        reverse=True)[:args.topk]:
                     try:
                         print (k + "\t" + str(v) + "\t" + str(model_dict["co_freq_dict"][desc][k]) +\
                                 "\t" + str(model_dict["title_freq_dict"][k])).encode('utf-8')
