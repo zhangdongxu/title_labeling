@@ -1,4 +1,30 @@
 #coding=utf-8
+
+"""
+This script has several modes.
+-b: build a model:
+    Input: corpus
+    Output: description-title co-occurrence frequency dict
+            title frequency dict
+            description frequency dict
+-m: merge several models
+    Input: a directory containing several models
+    Output: a merged model
+-p: prune a model
+    Input: a model file
+    Output: pruned model
+-fl: interactive mode
+    Input: Type in a query
+    Output: Print top k related titles
+-e: evaluation mode
+    Input: a model file
+           a evaluation data
+    Output: print evaluation result
+
+Written by Dongxu
+Last edit time: 2017/3/15
+"""
+
 import argparse
 import os
 import re
@@ -46,7 +72,7 @@ class Descriptor:
         self.co_freq_dict = {}
         self.title_freq_dict = {}
         self.desc_freq_dict = {}
-        self.pattern = re.compile("《(.*?)》".decode('utf-8'))
+        self.pattern = re.compile("《(.*?)》".decode('utf-8')) #predefined pattern
         self.score_methods = {'raw': (self.load_model, self.rank_titles), \
                                 'bm25': (self.load_model_bm25, self.rank_titles_bm25), \
                                 'and': (self.load_model_and, self.rank_titles_and)}
@@ -63,6 +89,7 @@ class Descriptor:
         return filelist
 
     def load_desc(self, desc_file):
+        """Load description list into memory. This list is required."""
         descriptors = open(desc_file).read().decode('utf-8').split('\n')
         for i in xrange(len(descriptors)):
             descriptors[i] = "".join(descriptors[i].split())
@@ -72,6 +99,7 @@ class Descriptor:
         self.desc_set = desc_set
 
     def load_title(self, title_file):
+        """If we provide a title list, then load it into memory"""
         titles=open(title_file).read().decode('utf-8').split('\n')[:-1]
         for i in xrange(len(titles)):
             titles[i] = titles[i].split()[0]
@@ -80,6 +108,9 @@ class Descriptor:
         self.title_set = title_set
 
     def match_pattern_in_line(self, line):
+        """match the predefined pattern in a line. 
+           Return a list of tuples containing 
+           the start and end+1 index of each matched string."""
         iterator = self.pattern.finditer(line)
         pattern_positions = []
         for match in iterator:
@@ -87,15 +118,19 @@ class Descriptor:
         return pattern_positions
 
     def count_freq(self):
+        '''If you want to inherit this class, 
+           you need to complete this function'''
         raise NotImplementedError
     
     def save_model(self, model_file):
+        """Save counted frequency into a model_file using pickle"""
         model_dict = {"co_freq_dict":self.co_freq_dict, \
                       "title_freq_dict":self.title_freq_dict, \
                       "desc_freq_dict":self.desc_freq_dict}
         pickle.dump(model_dict, open(model_file + ".p","wb"), protocol=2)
 
     def merge_model(self, merge_dir, output_model_file):
+        """merge different models under a directory and save the merged model."""
         print "start merging..."
         model_files = self.list_dir(merge_dir)
         print str(len(model_files)) + " model files founded"
@@ -128,6 +163,7 @@ class Descriptor:
         print "model merged"
 
     def load_model(self, model_file):
+        """Load model into memory and devide co_freq_dict by sqrt(title_freq) """
         model_dict = pickle.load(open(model_file,"rb"))
         self.title_freq_dict = model_dict["title_freq_dict"]
         self.desc_freq_dict = model_dict["desc_freq_dict"]
@@ -142,6 +178,7 @@ class Descriptor:
                 self.co_freq_devide_title[desc][title] /= self.title_sqrt_dict[title]
 
     def load_model_bm25(self, model_file, k1 = 1.2, b = 0.75):
+        """Load model into memory and prepare for bm25"""
         model_dict = pickle.load(open(model_file,"rb"))
         self.title_freq_dict = model_dict["title_freq_dict"]
         self.desc_freq_dict = model_dict["desc_freq_dict"]
@@ -161,6 +198,7 @@ class Descriptor:
             self.title_K[title] = k1 * (1 - b + b * freq / avg_title_freq)
 
     def load_model_and(self, model_file):
+        """Load model into memory and prepare for and logic"""
         model_dict = pickle.load(open(model_file,"rb"))
         self.title_freq_dict = model_dict["title_freq_dict"]
         self.desc_freq_dict = model_dict["desc_freq_dict"]
@@ -176,11 +214,16 @@ class Descriptor:
         self.score_not_appear = math.log(1 / max([value for title, value in self.title_sqrt_dict.items()]))
 
     def load_testset(self, testset):
+        """Load data for evaluation, where there are some descriptions 
+           and their corresponding movie titles from Douban"""
         self.test_dict = pickle.load(open(testset, "rb"))
         for i, (desc, titles) in enumerate(self.test_dict.items()):
             self.test_dict[desc] = set(titles)
 
     def match_desc(self, string):
+        """Forward maximum match descriptions in a string
+           and return a list of matched descriptions.
+           Use this function in query analysis."""
         ngram_descs = []
         string_length = len(string)
         current_index = 0
@@ -202,6 +245,8 @@ class Descriptor:
         return ngram_descs
 
     def bubble_sort_descent(self, dict_list, topk):
+        """partial sort titles with top k 
+           highest scores using bubble sort."""
         for i in xrange(topk):
             for j in xrange(len(dict_list) - 1, i, -1):
                 if dict_list[j][1] > dict_list[j - 1][1]:
@@ -209,6 +254,9 @@ class Descriptor:
         return dict_list[:topk]
 
     def rank_titles(self, ngram_descs, topk, partial_rank = False):
+        """Given a list of descriptions, return top k most related titles (for example movie names).
+           Scoring method is simple addition over each description's corresponding title score,
+           where each title score is its co_freq / sqrt(title_freq)"""
         result_titles = []
         if len(ngram_descs) == 0:
             print "描述词未出现"
@@ -236,6 +284,10 @@ class Descriptor:
         return result_titles
 
     def rank_titles_bm25(self, ngram_descs, topk, k1=1.2, b=0.75, partial_rank = False):
+        """Given a list of descriptions, return top k most related titles (for example movie names).
+           Scoring method is similar to bm25. This method take into consideration 
+           the importance of each description and the popularity of titles
+           in a conditional probabilistic way"""
         result_titles = []
         if len(ngram_descs) == 0:
             print "描述词未出现"
@@ -266,6 +318,10 @@ class Descriptor:
         return result_titles
 
     def rank_titles_and(self, ngram_descs, topk, partial_rank = False):
+        """Given a list of descriptions, return top k most related titles (for example movie names).
+           Scoring method is the sum of title scores over different descriptions. 
+           title score = log(co_freq/sqrt(title_freq)). 
+           If co_freq = 0, then title score = log(1/sqrt(max_title_freq)) """
         result_titles = []
         if len(ngram_descs) == 0:
             print "描述词未出现"
@@ -296,6 +352,7 @@ class Descriptor:
         return result_titles
 
     def prune(self, model_file, prune_threshold = 1.0):
+        """load model and prune it with a threshold"""
         model_dict = pickle.load(open(model_file,"rb"))
         self.title_freq_dict = model_dict["title_freq_dict"]
         self.desc_freq_dict = model_dict["desc_freq_dict"]
@@ -342,6 +399,8 @@ class Descriptor:
 class DescriptorParagraph(Descriptor):
 
     def __descriptor_allmatch(self, string):
+        """when counting frequency, match descriptions in a string
+           using all bigram, trigram, 4gram and return matched descriptions in a list"""
         ngram_descs = []
         string_length = len(string)
         if string_length >= 2:
@@ -359,6 +418,8 @@ class DescriptorParagraph(Descriptor):
         return ngram_descs
 
     def __descriptor_maxmatch(self, string):
+        """When counting frequency, match descriptions in a string
+           using forward maximum match method."""
         ngram_descs = []
         string_length = len(string)
         current_index = 0
@@ -380,6 +441,8 @@ class DescriptorParagraph(Descriptor):
         return ngram_descs 
 
     def count_freq(self, input_file, given_title = False):
+        """count frequency of co-occurred (line-wise) title-description pairs, 
+           frequency of titles and frequency of descriptions given a input file"""
         if input_file[-4:] == '.bz2':
             lines = os.popen("bunzip2 -c " + input_file).read().split("\n")
         else:
@@ -434,6 +497,10 @@ class DescriptorParagraph(Descriptor):
 class DescriptorWindow(Descriptor):
 
     def __descriptor_allmatch(self, string, start, end):
+        """when counting frequency, match descriptions in a string[start:end]
+           using all bigram, trigram, 4gram and add the start and end index of 
+           matched descriptions into self.index_desc_start and self.index_desc_end
+           seperately."""
         length = end - start
         #2gram
         if length >= 2:
@@ -455,6 +522,10 @@ class DescriptorWindow(Descriptor):
                     self.index_desc_end[i + 3].append(string[i:i + 4])
 
     def __descriptor_maxmatch(self, string, start, end):
+        """when counting frequency, match descriptions in a string[start:end]
+           using maximum match method and add the start and end index of 
+           matched descriptions into self.index_desc_start and self.index_desc_end
+           seperately."""
         current_index = start
         while(current_index < end):
             if current_index + 3 < end and \
@@ -476,12 +547,15 @@ class DescriptorWindow(Descriptor):
                 current_index += 1
 
     def set_window_weight(self, window_size):
+        """In this class, we set window weights equally."""
         self.weight = []
         self.window_size = window_size
         for i in xrange(window_size):
             self.weight.append(1.0)
 
     def count_freq(self, input_file, given_title = False):
+        """count frequency of co-occurred (character-window-wise) title-description pairs, 
+           frequency of titles and frequency of descriptions given a input file"""
         if input_file[-4:] == '.bz2':
             lines = os.popen("bunzip2 -c " + input_file).read().split("\n")
         else:
@@ -584,7 +658,11 @@ class DescriptorWindow(Descriptor):
 
 class DescriptorWeightedWindow(DescriptorWindow):
 
-    def set_window_weight(self, window_size, sf):
+    def set_window_weight(self, window_size, sf = 2):
+        """In this class, we decay window weigth 
+           when distance between title and description increases. 
+           sf is smooth factor. default is 2.
+           Shortest distance is 1."""
         self.weight = []
         self.window_size = window_size
         for i in xrange(window_size):
