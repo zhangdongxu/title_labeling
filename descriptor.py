@@ -635,26 +635,26 @@ class DescriptorWindow(Descriptor):
                 for index in xrange(left_window[0], left_window[1]):
                     dist = left_window[1] - index
                     for desc in self.index_desc_start[index]:
-                        dist = dist - len(desc)#minimum distance, start from zero
+                        dist_ = dist - len(desc)#minimum distance, start from zero
                         if desc not in self.co_freq_dict:
-                            self.co_freq_dict[desc] = {title:self.weight[dist]}
+                            self.co_freq_dict[desc] = {title:self.weight[dist_]}
                         else:
                             if title not in self.co_freq_dict[desc]:
-                                self.co_freq_dict[desc][title] = self.weight[dist]
+                                self.co_freq_dict[desc][title] = self.weight[dist_]
                             else:
-                                self.co_freq_dict[desc][title] += self.weight[dist]
+                                self.co_freq_dict[desc][title] += self.weight[dist_]
                 #right window
                 for index in xrange(right_window[0], right_window[1]):
                     dist = index - right_window[0] + 1
                     for desc in self.index_desc_end[index]:
-                        dist = dist - len(desc)#minimum distance, start from zero   
+                        dist_ = dist - len(desc)#minimum distance, start from zero   
                         if desc not in self.co_freq_dict:
-                            self.co_freq_dict[desc] = {title:self.weight[dist]}
+                            self.co_freq_dict[desc] = {title:self.weight[dist_]}
                         else:
                             if title not in self.co_freq_dict[desc]:
-                                self.co_freq_dict[desc][title] = self.weight[dist]
+                                self.co_freq_dict[desc][title] = self.weight[dist_]
                             else:
-                                self.co_freq_dict[desc][title] += self.weight[dist]
+                                self.co_freq_dict[desc][title] += self.weight[dist_]
 
 
 class DescriptorWeightedWindow(DescriptorWindow):
