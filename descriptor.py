@@ -32,6 +32,7 @@ import pickle
 import copy
 import math
 import sys
+import trie, actrie
 
 parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group(required=True)
@@ -65,9 +66,11 @@ parser.add_argument("--testset",help="testset for evaluation",default="")
 parser.add_argument("--score_method",help="scoring method for evaluation and fastload. [and|raw|bm25]",default="and")
 parser.add_argument("--topk", help="sets top k value for ranking", type=int, default=10)
 parser.add_argument("--partial_rank", help="this flag is useful to speed up ranking for service", action="store_true")
+parser.add_argument("--string_match", help="string match method. Maxmatch use trie. \
+                                            Allmatch use Aho-Corasick automation. [max|all]", default="max")
+
 
 class Descriptor:
-
     def __init__(self):
         self.co_freq_dict = {}
         self.title_freq_dict = {}
@@ -88,12 +91,22 @@ class Descriptor:
                 filelist.extend(self.list_dir(path))
         return filelist
 
-    def load_desc(self, desc_file):
+    def load_desc(self, desc_file, string_match = 'max'):
         """Load description list into memory. This list is required."""
         descriptors = open(desc_file).read().decode('utf-8').split('\n')
+        max_length_desc = 0
         for i in xrange(len(descriptors)):
             descriptors[i] = "".join(descriptors[i].split())
+            if len(descriptors[i]) > max_length_desc:
+                max_length_desc = len(descriptors[i])
+        self.max_length_desc = max_length_desc
         desc_set = set(descriptors)
+        self.string_match = string_match
+        if self.string_match == 'max':
+            self.desc_trie = trie.load(desc_set)
+        elif self.string_match == 'all':
+            self.desc_actrie = actrie.load(desc_set)
+            
         
         print str(len(descriptors)) + " descriptors loaded."
         self.desc_set = desc_set
@@ -162,12 +175,22 @@ class Descriptor:
         self.save_model(output_model_file)
         print "model merged"
 
-    def load_model(self, model_file):
+    def load_model(self, model_file, string_match = 'max'):
         """Load model into memory and devide co_freq_dict by sqrt(title_freq) """
         model_dict = pickle.load(open(model_file,"rb"))
         self.title_freq_dict = model_dict["title_freq_dict"]
         self.desc_freq_dict = model_dict["desc_freq_dict"]
         self.co_freq_dict = model_dict["co_freq_dict"]
+        self.string_match = string_match
+        if self.string_match == 'max':
+            self.desc_trie = trie.load(self.desc_freq_dict)
+        elif self.string_match == 'all':
+            self.desc_actrie = actrie.load(self.desc_freq_dict)
+
+        self.max_length_desc = 0
+        for desc in self.co_freq_dict:
+            if len(desc) > self.max_length_desc:
+                self.max_length_desc = len(desc)
 
         self.title_sqrt_dict = copy.deepcopy(self.title_freq_dict)
         for title in self.title_sqrt_dict:
@@ -177,12 +200,22 @@ class Descriptor:
             for title in titles:
                 self.co_freq_devide_title[desc][title] /= self.title_sqrt_dict[title]
 
-    def load_model_bm25(self, model_file, k1 = 1.2, b = 0.75):
+    def load_model_bm25(self, model_file, k1 = 1.2, b = 0.75, string_match = 'max'):
         """Load model into memory and prepare for bm25"""
         model_dict = pickle.load(open(model_file,"rb"))
         self.title_freq_dict = model_dict["title_freq_dict"]
         self.desc_freq_dict = model_dict["desc_freq_dict"]
         self.co_freq_dict = model_dict["co_freq_dict"]
+        self.string_match = string_match
+        if self.string_match == 'max':
+            self.desc_trie = trie.load(self.desc_freq_dict)
+        elif self.string_match == 'all':
+            self.desc_actrie = actrie.load(self.desc_freq_dict)
+
+        self.max_length_desc = 0
+        for desc in self.co_freq_dict:
+            if len(desc) > self.max_length_desc:
+                self.max_length_desc = len(desc)
 
         number_of_titles = len(self.title_freq_dict)
         avg_title_freq = 0
@@ -197,12 +230,22 @@ class Descriptor:
         for title, freq in self.title_freq_dict.items():
             self.title_K[title] = k1 * (1 - b + b * freq / avg_title_freq)
 
-    def load_model_and(self, model_file):
+    def load_model_and(self, model_file, string_match = 'max'):
         """Load model into memory and prepare for and logic"""
         model_dict = pickle.load(open(model_file,"rb"))
         self.title_freq_dict = model_dict["title_freq_dict"]
         self.desc_freq_dict = model_dict["desc_freq_dict"]
         self.co_freq_dict = model_dict["co_freq_dict"]
+        self.string_match = string_match
+        if self.string_match == 'max':
+            self.desc_trie = trie.load(self.desc_freq_dict)
+        elif self.string_match == 'all':
+            self.desc_actrie = actrie.load(self.desc_freq_dict)
+
+        self.max_length_desc = 0
+        for desc in self.co_freq_dict:
+            if len(desc) > self.max_length_desc:
+                self.max_length_desc = len(desc)
 
         self.title_sqrt_dict = copy.deepcopy(self.title_freq_dict)
         for title in self.title_sqrt_dict:
@@ -221,7 +264,7 @@ class Descriptor:
         for i, (desc, titles) in enumerate(self.test_dict.items()):
             self.test_dict[desc] = set(titles)
 
-    def match_desc(self, string):
+    def match_desc_max(self, string):
         """Forward maximum match descriptions in a string
            and return a list of matched descriptions.
            Use this function in query analysis."""
@@ -229,20 +272,27 @@ class Descriptor:
         string_length = len(string)
         current_index = 0
         while(current_index < string_length):
-            if current_index + 4 <= string_length and \
-               string[current_index:current_index + 4] in self.co_freq_dict:
-                ngram_descs.append(string[current_index:current_index + 4])
-                current_index += 4
-            elif current_index + 3 <= string_length and \
-               string[current_index:current_index + 3] in self.co_freq_dict:
-                ngram_descs.append(string[current_index:current_index + 3])
-                current_index += 3 
-            elif current_index + 2 <= string_length and \
-               string[current_index:current_index + 2] in self.co_freq_dict:
-                ngram_descs.append(string[current_index:current_index + 2])
-                current_index += 2
-            else:
+            add_index = self.desc_trie.maxmatch(string[current_index:])
+            if add_index == 0:
                 current_index += 1
+            else:
+                ngram_descs.append(string[current_index:current_index + add_index])
+                current_index += add_index 
+        return ngram_descs
+
+    def match_desc_all(self, string):
+        """Match all descriptions in a string
+           and return a list of matched descriptions.
+           Use this function in query analysis."""
+        ngram_descs = []
+        node = self.desc_actrie
+        for ch in string:
+            node = node.move(ch)
+            if node is None:
+                node = self.desc_actrie
+            else:
+                for match_string in node.generate_all_suffix_nodes_values():
+                    ngram_descs.append(match_string)
         return ngram_descs
 
     def bubble_sort_descent(self, dict_list, topk):
@@ -400,22 +450,17 @@ class Descriptor:
 class DescriptorParagraph(Descriptor):
 
     def __descriptor_allmatch(self, string):
-        """when counting frequency, match descriptions in a string
-           using all bigram, trigram, 4gram and return matched descriptions in a list"""
+        """when counting frequency, match all descriptions in a string
+           and return matched descriptions in a list"""
         ngram_descs = []
-        string_length = len(string)
-        if string_length >= 2:
-            for i in xrange(string_length - 1):
-                if string[i:i + 2] in self.desc_set:
-                    ngram_descs.append(string[i:i + 2])
-        if string_length >= 3:
-            for i in xrange(string_length - 2):
-                if string[i:i + 3] in self.desc_set:
-                    ngram_descs.append(string[i:i + 3])
-        if string_length >= 4:
-            for i in xrange(string_length - 3):
-                if string[i:i + 4] in self.desc_set:
-                    ngram_descs.append(string[i:i + 4])
+        node = self.desc_actrie
+        for ch in string:
+            node = node.move(ch)
+            if node is None:
+                node = self.desc_actrie
+            else:
+                for match_data in node.generate_all_suffix_nodes_values():
+                    ngram_descs.append(match_data)
         return ngram_descs
 
     def __descriptor_maxmatch(self, string):
@@ -425,25 +470,22 @@ class DescriptorParagraph(Descriptor):
         string_length = len(string)
         current_index = 0
         while(current_index < string_length):
-            if current_index + 4 <= string_length and \
-               string[current_index:current_index + 4] in self.desc_set:
-                ngram_descs.append(string[current_index:current_index + 4])
-                current_index += 4
-            elif current_index + 3 <= string_length and \
-               string[current_index:current_index + 3] in self.desc_set:
-                ngram_descs.append(string[current_index:current_index + 3])
-                current_index += 3 
-            elif current_index + 2 <= string_length and \
-               string[current_index:current_index + 2] in self.desc_set:
-                ngram_descs.append(string[current_index:current_index + 2])
-                current_index += 2
-            else:
+            add_index = self.desc_trie.maxmatch(string[current_index:])
+            if add_index == 0:
                 current_index += 1
+            else:
+                ngram_descs.append(string[current_index: current_index + add_index])
+                current_index += add_index
         return ngram_descs 
 
     def count_freq(self, input_file, given_title = False):
         """count frequency of co-occurred (line-wise) title-description pairs, 
            frequency of titles and frequency of descriptions given a input file"""
+        if self.string_match == 'max':
+            descriptor_match = self.__descriptor_maxmatch
+        elif self.string_match == 'all':
+            descriptor_match = self.__descriptor_allmatch
+
         if input_file[-4:] == '.bz2':
             lines = os.popen("bunzip2 -c " + input_file).read().split("\n")
         else:
@@ -469,9 +511,9 @@ class DescriptorParagraph(Descriptor):
                     if (given_title == True and title in self.title_set) \
                         or given_title == False:
                         matched_titles.append(title)
-                        matched_descriptors.extend(self.__descriptor_maxmatch(line[history:start]))
+                        matched_descriptors.extend(descriptor_match(line[history:start]))
                     history = end
-            matched_descriptors.extend(self.__descriptor_maxmatch(line[history:]))
+            matched_descriptors.extend(descriptor_match(line[history:]))
             matched_titles = list(set(matched_titles))
             matched_descriptors = list(set(matched_descriptors))
             for title in matched_titles:
@@ -498,29 +540,20 @@ class DescriptorParagraph(Descriptor):
 class DescriptorWindow(Descriptor):
 
     def __descriptor_allmatch(self, string, start, end):
-        """when counting frequency, match descriptions in a string[start:end]
-           using all bigram, trigram, 4gram and add the start and end index of 
-           matched descriptions into self.index_desc_start and self.index_desc_end
-           seperately."""
-        length = end - start
-        #2gram
-        if length >= 2:
-            for i in xrange(start, end - 1):
-                if string[i:i + 2] in self.desc_set:
-                    self.index_desc_start[i].append(string[i:i + 2])
-                    self.index_desc_end[i + 1].append(string[i:i + 2])
-        #3gram
-        if length >= 3:
-            for i in xrange(start, end - 2):
-                if string[i:i + 3] in self.desc_set:
-                    self.index_desc_start[i].append(string[i:i + 3])
-                    self.index_desc_end[i + 2].append(string[i:i + 3])
-        #4gram
-        if length >= 4:
-            for i in xrange(start, end - 3):
-                if string[i:i + 4] in self.desc_set:
-                    self.index_desc_start[i].append(string[i:i + 4])
-                    self.index_desc_end[i + 3].append(string[i:i + 4])
+        """when counting frequency, match all descriptions in a string[start:end]
+           and add the start and end index of matched descriptions into 
+           self.index_desc_start and self.index_desc_end seperately."""
+        node = self.desc_actrie
+        current_index = start
+        for ch in string[start:end]:
+            node = node.move(ch)
+            if node is None:
+                node = self.desc_actrie
+            else:
+                for match_data in node.generate_all_suffix_nodes_values():
+                    self.index_desc_start[current_index - len(match_data) + 1].append(match_data)
+                    self.index_desc_end[current_index].append(match_data)
+            current_index += 1
 
     def __descriptor_maxmatch(self, string, start, end):
         """when counting frequency, match descriptions in a string[start:end]
@@ -529,23 +562,13 @@ class DescriptorWindow(Descriptor):
            seperately."""
         current_index = start
         while(current_index < end):
-            if current_index + 3 < end and \
-               string[current_index:current_index + 4] in self.desc_set:
-                self.index_desc_start[current_index].append(string[current_index:current_index + 4])
-                self.index_desc_end[current_index + 3].append(string[current_index:current_index + 4])
-                current_index += 4
-            elif current_index + 2 < end and \
-               string[current_index:current_index + 3] in self.desc_set:
-                self.index_desc_start[current_index].append(string[current_index:current_index + 3])
-                self.index_desc_end[current_index + 2].append(string[current_index:current_index + 3])
-                current_index += 3
-            elif current_index + 1 < end and \
-               string[current_index:current_index + 2] in self.desc_set:
-                self.index_desc_start[current_index].append(string[current_index:current_index + 2])
-                self.index_desc_end[current_index + 1].append(string[current_index:current_index + 2])
-                current_index += 2
-            else:
+            add_index = self.desc_trie.maxmatch(string[current_index:end])
+            if add_index == 0:
                 current_index += 1
+            else:
+                self.index_desc_start[current_index].append(string[current_index: current_index + add_index])
+                self.index_desc_end[current_index + add_index - 1].append(string[current_index: current_index + add_index])
+                current_index += add_index
 
     def set_window_weight(self, window_size):
         """In this class, we set window weights equally."""
@@ -557,6 +580,11 @@ class DescriptorWindow(Descriptor):
     def count_freq(self, input_file, given_title = False):
         """count frequency of co-occurred (character-window-wise) title-description pairs, 
            frequency of titles and frequency of descriptions given a input file"""
+        if self.string_match == 'max':
+            descriptor_match = self.__descriptor_maxmatch
+        elif self.string_match == 'all':
+            descriptor_match = self.__descriptor_allmatch
+
         if input_file[-4:] == '.bz2':
             lines = os.popen("bunzip2 -c " + input_file).read().split("\n")
         else:
@@ -599,10 +627,10 @@ class DescriptorWindow(Descriptor):
                         title_positions.append([start, end]) # save margins of this title
 
                         #save descriptors between the last title and current title.
-                        self.__descriptor_maxmatch(line, history, start)
+                        descriptor_match(line, history, start)
                         history = end
                         
-            self.__descriptor_maxmatch(line, history, len(line))
+            descriptor_match(line, history, len(line))
 
             #count frequency of descs
             for index, descriptors in self.index_desc_start.items():
@@ -635,26 +663,26 @@ class DescriptorWindow(Descriptor):
                 for index in xrange(left_window[0], left_window[1]):
                     dist = left_window[1] - index
                     for desc in self.index_desc_start[index]:
-                        dist = dist - len(desc)#minimum distance, start from zero
+                        dist_ = dist - len(desc)#minimum distance, start from zero
                         if desc not in self.co_freq_dict:
-                            self.co_freq_dict[desc] = {title:self.weight[dist]}
+                            self.co_freq_dict[desc] = {title:self.weight[dist_]}
                         else:
                             if title not in self.co_freq_dict[desc]:
-                                self.co_freq_dict[desc][title] = self.weight[dist]
+                                self.co_freq_dict[desc][title] = self.weight[dist_]
                             else:
-                                self.co_freq_dict[desc][title] += self.weight[dist]
+                                self.co_freq_dict[desc][title] += self.weight[dist_]
                 #right window
                 for index in xrange(right_window[0], right_window[1]):
                     dist = index - right_window[0] + 1
                     for desc in self.index_desc_end[index]:
-                        dist = dist - len(desc)#minimum distance, start from zero   
+                        dist_ = dist - len(desc)#minimum distance, start from zero   
                         if desc not in self.co_freq_dict:
-                            self.co_freq_dict[desc] = {title:self.weight[dist]}
+                            self.co_freq_dict[desc] = {title:self.weight[dist_]}
                         else:
                             if title not in self.co_freq_dict[desc]:
-                                self.co_freq_dict[desc][title] = self.weight[dist]
+                                self.co_freq_dict[desc][title] = self.weight[dist_]
                             else:
-                                self.co_freq_dict[desc][title] += self.weight[dist]
+                                self.co_freq_dict[desc][title] += self.weight[dist_]
 
 
 class DescriptorWeightedWindow(DescriptorWindow):
@@ -680,7 +708,7 @@ def main():
 
         if args.model_type == "paragraph":
             descriptor = DescriptorParagraph()
-            descriptor.load_desc(desc_file)
+            descriptor.load_desc(desc_file, args.string_match)
             if title_file != "":
                 descriptor.load_title(title_file)
                 descriptor.count_freq(input_file, given_title = True)
@@ -689,7 +717,7 @@ def main():
             descriptor.save_model(model_file)
         elif args.model_type == "window":
             descriptor = DescriptorWindow()
-            descriptor.load_desc(desc_file)
+            descriptor.load_desc(desc_file, args.string_match)
             if title_file != "":
                 descriptor.load_title(title_file)
                 descriptor.set_window_weight(args.window_size)
@@ -700,7 +728,7 @@ def main():
             descriptor.save_model(model_file)
         elif args.model_type == "weightedwindow":
             descriptor = DescriptorWeightedWindow()
-            descriptor.load_desc(desc_file)
+            descriptor.load_desc(desc_file, args.string_match)
             if title_file != "":
                 descriptor.load_title(title_file)
                 descriptor.set_window_weight(args.window_size, args.smooth_factor)
@@ -730,7 +758,11 @@ def main():
         descriptor = Descriptor()
         load_model = descriptor.score_methods[args.score_method][0]
         ranking = descriptor.score_methods[args.score_method][1]
-        load_model(args.model)
+        if args.string_match == 'max':
+            match_desc = descriptor.match_desc_max
+        elif args.string_match == 'all':
+            match_desc = descriptor.match_desc_all
+        load_model(args.model, args.string_match)
         
         while(1):
             print "输入描述[d] or 退出[exit]：[d/exit]"
@@ -745,7 +777,8 @@ def main():
                 except:
                     string = raw_input()
 
-                ngram_descs = descriptor.match_desc(string)
+                ngram_descs = match_desc(string)
+                print ngram_descs
                 titles = ranking(ngram_descs, args.topk, partial_rank = args.partial_rank)
                 print "——————————————————————"
                 for title in titles:
@@ -770,17 +803,17 @@ def main():
         cofreq_devide_title = copy.deepcopy(model_dict["co_freq_dict"])# dict[desc][title]
         for desc in model_dict["co_freq_dict"]:
             for title in model_dict["co_freq_dict"][desc]:
-                cofreq_devide_title[desc][title] /= title_sqrt_dict[title]
+                cofreq_devide_title[desc][title] = (cofreq_devide_title[desc][title] + 1)/title_sqrt_dict[title]
 
         cofreq_devide_desc = {}# dict[title][desc]
         for desc in model_dict["co_freq_dict"]:
             for title in model_dict["co_freq_dict"][desc]:
                 if title not in cofreq_devide_desc:
                     cofreq_devide_desc[title] =\
-                    {desc:model_dict["co_freq_dict"][desc][title]/desc_sqrt_dict[desc]}
+                    {desc:(model_dict["co_freq_dict"][desc][title])/desc_sqrt_dict[desc]}
                 else:
                     cofreq_devide_desc[title][desc] =\
-                    model_dict["co_freq_dict"][desc][title]/desc_sqrt_dict[desc]
+                    (model_dict["co_freq_dict"][desc][title])/desc_sqrt_dict[desc]
 
         while(1):
             print "输入电影名[t] Or 输入描述词[d] or 退出[exit]：[t/d/exit]"
