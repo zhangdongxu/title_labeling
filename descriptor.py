@@ -1,5 +1,3 @@
-#coding=utf-8
-
 """
 This script has several modes.
 -b: build a model:
@@ -26,7 +24,7 @@ Last edit time: 2017/3/15
 """
 
 import argparse
-import os
+import os, subprocess
 import re
 import pickle
 import copy
@@ -75,7 +73,7 @@ class Descriptor:
         self.co_freq_dict = {}
         self.title_freq_dict = {}
         self.desc_freq_dict = {}
-        self.pattern = re.compile("《(.*?)》".decode('utf-8')) #predefined pattern
+        self.pattern = re.compile("《(.*?)》") #predefined pattern
         self.score_methods = {'raw': (self.load_model, self.rank_titles), \
                                 'bm25': (self.load_model_bm25, self.rank_titles_bm25), \
                                 'and': (self.load_model_and, self.rank_titles_and)}
@@ -93,9 +91,9 @@ class Descriptor:
 
     def load_desc(self, desc_file, string_match = 'max'):
         """Load description list into memory. This list is required."""
-        descriptors = open(desc_file).read().decode('utf-8').split('\n')
+        descriptors = open(desc_file).read().split('\n')
         max_length_desc = 0
-        for i in xrange(len(descriptors)):
+        for i in range(len(descriptors)):
             descriptors[i] = "".join(descriptors[i].split())
             if len(descriptors[i]) > max_length_desc:
                 max_length_desc = len(descriptors[i])
@@ -108,16 +106,16 @@ class Descriptor:
             self.desc_actrie = actrie.load(desc_set)
             
         
-        print str(len(descriptors)) + " descriptors loaded."
+        print(str(len(descriptors)) + " descriptors loaded.")
         self.desc_set = desc_set
 
     def load_title(self, title_file):
         """If we provide a title list, then load it into memory"""
-        titles=open(title_file).read().decode('utf-8').split('\n')[:-1]
-        for i in xrange(len(titles)):
+        titles=open(title_file).read().split('\n')[:-1]
+        for i in range(len(titles)):
             titles[i] = titles[i].split()[0]
         title_set = set(titles)
-        print str(len(titles)) + " title names loaded."
+        print(str(len(titles)) + " title names loaded.")
         self.title_set = title_set
 
     def match_pattern_in_line(self, line):
@@ -144,10 +142,10 @@ class Descriptor:
 
     def merge_model(self, merge_dir, output_model_file):
         """merge different models under a directory and save the merged model."""
-        print "start merging..."
+        print("start merging...")
         model_files = self.list_dir(merge_dir)
-        print str(len(model_files)) + " model files founded"
-        print "start loading models"
+        print(str(len(model_files)) + " model files founded")
+        print("start loading models")
         for model_file in model_files:
             model_dict = pickle.load(open(model_file,"rb"))
             for desc in model_dict["co_freq_dict"]:
@@ -170,10 +168,10 @@ class Descriptor:
                     self.desc_freq_dict[desc] = model_dict["desc_freq_dict"][desc]
                 else:
                     self.desc_freq_dict[desc] += model_dict["desc_freq_dict"][desc]
-            print model_file + " merged"
+            print(model_file + " merged")
             sys.stdout.flush()
         self.save_model(output_model_file)
-        print "model merged"
+        print("model merged")
 
     def load_model(self, model_file, string_match = 'max'):
         """Load model into memory and devide co_freq_dict by sqrt(title_freq) """
@@ -298,8 +296,9 @@ class Descriptor:
     def bubble_sort_descent(self, dict_list, topk):
         """partial sort titles with top k 
            highest scores using bubble sort."""
-        for i in xrange(topk):
-            for j in xrange(len(dict_list) - 1, i, -1):
+        dict_list = list(dict_list)
+        for i in range(topk):
+            for j in range(len(dict_list) - 1, i, -1):
                 if dict_list[j][1] > dict_list[j - 1][1]:
                     dict_list[j], dict_list[j - 1] = dict_list[j - 1], dict_list[j]
         return dict_list[:topk]
@@ -310,9 +309,9 @@ class Descriptor:
            where each title score is its co_freq / sqrt(title_freq)"""
         result_titles = []
         if len(ngram_descs) == 0:
-            print "描述词未出现"
+            print("描述词未出现")
             for k,v in sorted(self.title_freq_dict.items(), \
-                        lambda x, y: cmp(x[1], y[1]), reverse=True)[:topk]:
+                        key = lambda x: x[1], reverse=True)[:topk]:
                 result_titles.append(k)
 
         else:
@@ -330,7 +329,7 @@ class Descriptor:
                     result_titles.append(k)
             else:
                 for k, v in sorted(title_scores.items(), \
-                        lambda x, y: cmp(x[1], y[1]), reverse=True)[:topk]:
+                        key = lambda x: x[1], reverse=True)[:topk]:
                     result_titles.append(k)
         return result_titles
 
@@ -341,9 +340,9 @@ class Descriptor:
            in a conditional probabilistic way"""
         result_titles = []
         if len(ngram_descs) == 0:
-            print "描述词未出现"
+            print("描述词未出现")
             for k,v in sorted(self.title_freq_dict.items(), \
-                        lambda x, y: cmp(x[1], y[1]), reverse=True)[:topk]:
+                        key = lambda x: x[1], reverse=True)[:topk]:
                 result_titles.append(k)
 
         else:
@@ -364,7 +363,7 @@ class Descriptor:
                     result_titles.append(k)
             else:
                 for k, v in sorted(title_scores.items(), \
-                        lambda x, y: cmp(x[1], y[1]), reverse=True)[:topk]:
+                        key = lambda x: x[1], reverse=True)[:topk]:
                     result_titles.append(k)
         return result_titles
 
@@ -375,9 +374,9 @@ class Descriptor:
            If co_freq = 0, then title score = log(1/sqrt(max_title_freq)) """
         result_titles = []
         if len(ngram_descs) == 0:
-            print "描述词未出现"
+            print("描述词未出现")
             for k,v in sorted(self.title_freq_dict.items(), \
-                        lambda x, y: cmp(x[1], y[1]), reverse=True)[:topk]:
+                        key = lambda x: x[1], reverse=True)[:topk]:
                 result_titles.append(k)
 
         else:
@@ -398,7 +397,7 @@ class Descriptor:
                     result_titles.append(k)
             else:
                 for k, v in sorted(title_scores.items(), \
-                        lambda x, y: cmp(x[1], y[1]), reverse=True)[:topk]:
+                        key = lambda x: x[1], reverse=True)[:topk]:
                     result_titles.append(k)
         return result_titles
 
@@ -431,13 +430,11 @@ class Descriptor:
         load_data = self.score_methods[method][0]
         ranking = self.score_methods[method][1]
         load_data(model_file)
-        print "data loaded"
+        print("data loaded")
         average_good_proportion = 0
         for desc, titles in self.test_dict.items():
             if desc not in self.co_freq_dict:
-                #print desc
                 continue
-            #print "ranking " + desc
             result_titles = ranking([desc], topk, partial_rank)
             for title in result_titles:
                 if title in titles:
@@ -445,7 +442,7 @@ class Descriptor:
                     break
                 
         average_good_proportion /= float(len(self.test_dict))
-        print "average top" +str(topk) + " hit rate= " + str(average_good_proportion)
+        print("average top" +str(topk) + " hit rate= " + str(average_good_proportion))
 
 class DescriptorParagraph(Descriptor):
 
@@ -487,17 +484,12 @@ class DescriptorParagraph(Descriptor):
             descriptor_match = self.__descriptor_allmatch
 
         if input_file[-4:] == '.bz2':
-            lines = os.popen("bunzip2 -c " + input_file).read().split("\n")
+            lines = subprocess.check_output(["bunzip2","-c",input_file]).decode('utf-8','replace').split('\n')
         else:
-            lines = open(input_file).read().split("\n")
+            lines = open(input_file, encoding='utf-8', errors='replace')
             
         for line_ in lines:
-            try:
-                line = line_.decode('utf-8')
-            except:
-                print "Error utf-8 decoding"
-                print line_
-                continue
+            line = line_.strip()
             if line[:7] == '<docno>' or line[:5] == '<url>':
                 continue
             pattern_positions = self.match_pattern_in_line(line)
@@ -574,7 +566,7 @@ class DescriptorWindow(Descriptor):
         """In this class, we set window weights equally."""
         self.weight = []
         self.window_size = window_size
-        for i in xrange(window_size):
+        for i in range(window_size):
             self.weight.append(1.0)
 
     def count_freq(self, input_file, given_title = False):
@@ -586,17 +578,12 @@ class DescriptorWindow(Descriptor):
             descriptor_match = self.__descriptor_allmatch
 
         if input_file[-4:] == '.bz2':
-            lines = os.popen("bunzip2 -c " + input_file).read().split("\n")
+            lines = subprocess.check_output(["bunzip2","-c",input_file]).decode('utf-8','replace').split('\n')
         else:
-            lines = open(input_file).read().split("\n")
+            lines = open(input_file, encoding='utf-8', errors='replace')
             
         for line_ in lines:
-            try:
-                line = line_.decode('utf-8')
-            except:
-                print "Error utf-8 decoding"
-                print line_
-                continue
+            line = line_.strip()
             if line[:7] == '<docno>' or line[:5] == '<url>':
                 continue
             pattern_positions = self.match_pattern_in_line(line)
@@ -609,7 +596,7 @@ class DescriptorWindow(Descriptor):
             self.index_desc_end = {}
                                  # save descriptors in this line by its end position index
                                  # key=index, value=list of descriptors
-            for i in xrange(len(line)):
+            for i in range(len(line)):
                 self.index_desc_start[i] = []
                 self.index_desc_end[i] = []
             # 
@@ -660,7 +647,7 @@ class DescriptorWindow(Descriptor):
                 title = line[start + 1:end - 1]
 
                 #left window
-                for index in xrange(left_window[0], left_window[1]):
+                for index in range(left_window[0], left_window[1]):
                     dist = left_window[1] - index
                     for desc in self.index_desc_start[index]:
                         dist_ = dist - len(desc)#minimum distance, start from zero
@@ -672,7 +659,7 @@ class DescriptorWindow(Descriptor):
                             else:
                                 self.co_freq_dict[desc][title] += self.weight[dist_]
                 #right window
-                for index in xrange(right_window[0], right_window[1]):
+                for index in range(right_window[0], right_window[1]):
                     dist = index - right_window[0] + 1
                     for desc in self.index_desc_end[index]:
                         dist_ = dist - len(desc)#minimum distance, start from zero   
@@ -694,7 +681,7 @@ class DescriptorWeightedWindow(DescriptorWindow):
            Shortest distance is 1."""
         self.weight = []
         self.window_size = window_size
-        for i in xrange(window_size):
+        for i in range(window_size):
             self.weight.append(float(sf)/(sf + 1 + i))
 
 
@@ -765,27 +752,17 @@ def main():
         load_model(args.model, args.string_match)
         
         while(1):
-            print "输入描述[d] or 退出[exit]：[d/exit]"
-            try:
-                act = raw_input().decode('utf-8')
-            except:
-                act = raw_input()
+            print("输入描述[d] or 退出[exit]：[d/exit]")
+            act = input()
             if act == "d":
-                print "请输入描述："
-                try:
-                    string = raw_input().decode('utf-8')
-                except:
-                    string = raw_input()
+                print("请输入描述：")
+                string = input()
 
                 ngram_descs = match_desc(string)
-                print ngram_descs
                 titles = ranking(ngram_descs, args.topk, partial_rank = args.partial_rank)
-                print "——————————————————————"
+                print("——————————————————————")
                 for title in titles:
-                    try:
-                        print title.encode('utf-8')
-                    except:
-                        print title
+                    print(title)
             elif act == "exit":
                 break
 
@@ -816,47 +793,33 @@ def main():
                     (model_dict["co_freq_dict"][desc][title])/desc_sqrt_dict[desc]
 
         while(1):
-            print "输入电影名[t] Or 输入描述词[d] or 退出[exit]：[t/d/exit]"
-            act = raw_input().decode('utf-8')
+            print("输入电影名[t] Or 输入描述词[d] or 退出[exit]：[t/d/exit]")
+            act = input()
             if act == 't':
-                print "请输入电影名："
-                try:
-                    title=raw_input().decode('utf-8')
-                except:
-                    title=raw_input()
+                print("请输入电影名：")
+                title=input()
                 if title not in model_dict["title_freq_dict"]:
-                    print "电影名不存在"
+                    print("电影名不存在")
                     continue
-                print "——————————————————————"
-                print "descriptor\tco_freq/desc_freq\tco_freq\tdesc_freq"
-                for k,v in sorted(cofreq_devide_desc[title].items(), lambda x, y: cmp(x[1],\
-                   y[1]), reverse=True)[:args.topk]:
-                    try:
-                        print (k + "\t" + str(v) + "\t" + str(model_dict["co_freq_dict"][k][title])\
-                                + "\t" + str(model_dict["desc_freq_dict"][k])).encode('utf-8')
-                    except:
-                        print k + "\t" + str(v) + "\t" + str(model_dict["co_freq_dict"][k][title]) \
-                                + "\t" +str(model_dict["desc_freq_dict"][k])
-                print "——————————————————————"
+                print("——————————————————————")
+                print("descriptor\tco_freq/desc_freq\tco_freq\tdesc_freq")
+                for k,v in sorted(cofreq_devide_desc[title].items(), key = lambda x: x[1],\
+                                  reverse=True)[:args.topk]:
+                    print(k + "\t" + str(v) + "\t" + str(model_dict["co_freq_dict"][k][title])\
+                                + "\t" + str(model_dict["desc_freq_dict"][k]))
+                print("——————————————————————")
             elif act == "d":
-                print "请输入描述词："
-                try:
-                    desc = raw_input().decode('utf-8')
-                except:
-                    desc = raw_input()
+                print("请输入描述词：")
+                desc = input()
                 if desc not in model_dict['desc_freq_dict']:
-                    print "描述词不存在"
+                    print("描述词不存在")
                     continue
-                print "——————————————————————"
-                print "title\tco_freq/sqrt(title_freq)\tco_freq\ttitle_freq"
-                for k,v in sorted(cofreq_devide_title[desc].items(), lambda x, y: cmp(x[1], y[1]),\
+                print("——————————————————————")
+                print("title\tco_freq/sqrt(title_freq)\tco_freq\ttitle_freq")
+                for k,v in sorted(cofreq_devide_title[desc].items(), key = lambda x: x[1],\
                         reverse=True)[:args.topk]:
-                    try:
-                        print (k + "\t" + str(v) + "\t" + str(model_dict["co_freq_dict"][desc][k]) +\
-                                "\t" + str(model_dict["title_freq_dict"][k])).encode('utf-8')
-                    except:
-                        print k + "\t" + str(v) + "\t" + str(model_dict["co_freq_dict"][desc][k]) +\
-                                "\t" + str(model_dict["title_freq_dict"][k])
+                    print(k + "\t" + str(v) + "\t" + str(model_dict["co_freq_dict"][desc][k]) +\
+                                "\t" + str(model_dict["title_freq_dict"][k]))
             elif act == "exit":
                 break
 

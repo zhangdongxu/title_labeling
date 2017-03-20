@@ -85,8 +85,8 @@ class ACTrieNode(TrieNode):
 
 def build_fail_links(root):
     """build fail link."""
-    import Queue
-    q = Queue.Queue()
+    import queue
+    q = queue.Queue()
     q.put(root)
     while not q.empty():
         cur = q.get()

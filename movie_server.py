@@ -6,7 +6,7 @@ import movie_pb2
 import movie_pb2_grpc
 
 import argparse
-from descriptor import Descriptor
+from descriptor_3 import Descriptor
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model",help="the path of the model to save or load",\
@@ -19,18 +19,12 @@ descriptor.load_model_and(args.model)
 
 class movieServicer(movie_pb2_grpc.FindMovieServiceServicer):
     def FindMovies(self, request, context):
-        try:
-            query = request.query.decode('utf-8')
-        except:
-            query = request.query
-        print (time.strftime('%Y-%m-%d/%H:%M:%S', time.localtime(time.time())) + '\t' + query).encode('utf-8')
+        query = request.query
+        print(time.strftime('%Y-%m-%d/%H:%M:%S', time.localtime(time.time())) + '\t' + query)#.encode('utf-8')
         sys.stdout.flush()
-        ngram_desc = descriptor.match_desc(query)
+        ngram_desc = descriptor.match_desc_max(query)
         titles = descriptor.rank_titles_and(ngram_desc, args.topk, partial_rank = True)
-        try:
-            movies = [title.encode('utf-8') for title in titles]
-        except:
-            movies = titles
+        movies = [title for title in titles]
         return movie_pb2.FindMovieReply(movies=movies)
 
 def serve():
@@ -38,7 +32,7 @@ def serve():
     movie_pb2.add_FindMovieServiceServicer_to_server(movieServicer(), server)
     server.add_insecure_port(args.address)
     server.start()
-    print "service started on " + args.address
+    print("service started on " + args.address)
     sys.stdout.flush()
     while True:
         time.sleep(0.1)
