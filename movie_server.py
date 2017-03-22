@@ -6,7 +6,7 @@ import movie_pb2
 import movie_pb2_grpc
 
 import argparse
-from descriptor_3 import Descriptor
+from descriptor import Descriptor
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model",help="the path of the model to save or load",\
@@ -20,7 +20,7 @@ descriptor.load_model_and(args.model)
 class movieServicer(movie_pb2_grpc.FindMovieServiceServicer):
     def FindMovies(self, request, context):
         query = request.query
-        print(time.strftime('%Y-%m-%d/%H:%M:%S', time.localtime(time.time())) + '\t' + query)#.encode('utf-8')
+        print(time.strftime('%Y-%m-%d/%H:%M:%S', time.localtime(time.time())) + '\t' + query)
         sys.stdout.flush()
         ngram_desc = descriptor.match_desc_max(query)
         titles = descriptor.rank_titles_and(ngram_desc, args.topk, partial_rank = True)

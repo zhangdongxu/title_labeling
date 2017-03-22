@@ -310,6 +310,7 @@ class Descriptor:
         result_titles = []
         if len(ngram_descs) == 0:
             print("描述词未出现")
+            sys.stdout.flush()
             for k,v in sorted(self.title_freq_dict.items(), \
                         key = lambda x: x[1], reverse=True)[:topk]:
                 result_titles.append(k)
@@ -341,6 +342,7 @@ class Descriptor:
         result_titles = []
         if len(ngram_descs) == 0:
             print("描述词未出现")
+            sys.stdout.flush()
             for k,v in sorted(self.title_freq_dict.items(), \
                         key = lambda x: x[1], reverse=True)[:topk]:
                 result_titles.append(k)
@@ -375,6 +377,7 @@ class Descriptor:
         result_titles = []
         if len(ngram_descs) == 0:
             print("描述词未出现")
+            sys.stdout.flush()
             for k,v in sorted(self.title_freq_dict.items(), \
                         key = lambda x: x[1], reverse=True)[:topk]:
                 result_titles.append(k)

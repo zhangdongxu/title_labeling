@@ -1,1 +1,1 @@
-python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. movie.proto
+python3 -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. movie.proto

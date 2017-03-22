@@ -23,7 +23,7 @@ do
 
   echo "input:" $input
   echo "output:" $output 
-  python descriptor.py -b --model_type $modeltype --window_size 10 --smooth_factor 2 --input $input --descriptor $descriptor_path --title $title_path --model $output > $workdir/log/log.$modelname/log.sogout_data.$partition.part-m-$i &
+  python3 descriptor.py -b --model_type $modeltype --window_size 10 --smooth_factor 2 --input $input --descriptor $descriptor_path --title $title_path --model $output > $workdir/log/log.$modelname/log.sogout_data.$partition.part-m-$i &
 
   count=$((count+1))
   if [ $count -eq $process_num ]; then
@@ -34,4 +34,4 @@ done
 done
 
 mkdir -p $workdir/model
-python descriptor.py -m --mergedir $workdir/outputs/$modelname --model $workdir/model/$modelname
+python3 descriptor.py -m --mergedir $workdir/outputs/$modelname --model $workdir/model/$modelname

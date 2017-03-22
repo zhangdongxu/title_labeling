@@ -33,7 +33,7 @@ do
 
   echo "input:" $input
   echo "output:" $output 
-  python descriptor.py -b --model_type $modeltype --window_size 10 --smooth_factor 2 --input $input --descriptor $descriptor_path --model $output > $workdir/log/log.$modelname/log.sogout_data.$partition.part-m-$i &
+  python3 descriptor.py -b --model_type $modeltype --window_size 10 --smooth_factor 2 --input $input --descriptor $descriptor_path --model $output > $workdir/log/log.$modelname/log.sogout_data.$partition.part-m-$i &
 
   count=$((count+1))
   if [ $count -ge $process_num ]; then
@@ -43,9 +43,9 @@ do
 done
 
 wait
-python descriptor.py -m --mergedir $workdir/outputs/$modelname/freq/sogout_data.$partition --model $workdir/model/$modelname/$modelname.sogout_data.$partition
-python descriptor.py -p --prune_threshold $prune_threshold --model $workdir/model/$modelname/$modelname.sogout_data.$partition.p --prune_file $workdir/model/$modelname.prune/$modelname.sogout_data.$partition.prune
+python3 descriptor.py -m --mergedir $workdir/outputs/$modelname/freq/sogout_data.$partition --model $workdir/model/$modelname/$modelname.sogout_data.$partition
+python3 descriptor.py -p --prune_threshold $prune_threshold --model $workdir/model/$modelname/$modelname.sogout_data.$partition.p --prune_file $workdir/model/$modelname.prune/$modelname.sogout_data.$partition.prune
 
 done
 
-python descriptor.py -m --mergedir $workdir/model/$modelname.prune --model $workdir/model/$modelname.prune
+python3 descriptor.py -m --mergedir $workdir/model/$modelname.prune --model $workdir/model/$modelname.prune

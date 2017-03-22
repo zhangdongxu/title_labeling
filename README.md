@@ -22,34 +22,34 @@ When the service started, it requires users' queries and returns a list of movie
    ```
 3. If you want to start a service with movie_server.py, then you should install grpc: 
    ```shell
-   pip install grpcio
+   pip3 install grpcio
    ```
    
    If you want to re-design a .proto file and compile it, you should also install grpc tool:
    ```shell
-   pip install grpcio-tools
+   pip3 install grpcio-tools
    ```
 4. You can also use *descriptor.py* for other specific needs:
 
    ```shell
    #help
-   python descriptor.py --help
+   python3 descriptor.py --help
 
    #build a model with a single corpus file input
-   python descriptor.py -b --model_type weightedwindow --window_size window_size --smooth_factor smooth_factor --input your_input_file --descriptor your_desc_file --title your_title_file  --model output_model_path
+   python3 descriptor.py -b --model_type weightedwindow --window_size window_size --smooth_factor smooth_factor --input your_input_file --descriptor your_desc_file --title your_title_file  --model output_model_path
    
    #prune a model with given threshold and model file
-   python descriptor.py -p --prune_threshold 1.0 --model input_model_path --prune_file output_pruned_model_path
+   python3 descriptor.py -p --prune_threshold 1.0 --model input_model_path --prune_file output_pruned_model_path
    
    #merge models you previously built
-   python descriptor.py -m --mergedir output_model_directory --model output_model_path 
+   python3 descriptor.py -m --mergedir output_model_directory --model output_model_path 
 
    #load a model and look at rankings in a interactive mode
-   python descriptor.py -fl --model model_path_you_want_to_load --score_method and --partial_rank
-   python descriptor.py -l --model model_path_you_want_to_load 
+   python3 descriptor.py -fl --model model_path_you_want_to_load --score_method and --partial_rank
+   python3 descriptor.py -l --model model_path_you_want_to_load 
 
    #load a model and evaluate it with a evaluation set and a ranking method
-   python descriptor.py -e --testset evaluation.p --score_method and --partial_rank --model input_model_path
+   python3 descriptor.py -e --testset evaluation.p --score_method and --partial_rank --model input_model_path
    ```
 
 5. You can import descriptor.py and instantiate `class Descriptor` or `class DescriptorWeightedWindow`  etc. Or you can inherit them for your needs.
