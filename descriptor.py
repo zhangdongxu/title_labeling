@@ -198,7 +198,7 @@ class Descriptor:
             for title in titles:
                 self.co_freq_devide_title[desc][title] /= self.title_sqrt_dict[title]
 
-    def load_model_bm25(self, model_file, k1 = 1.2, b = 0.75, string_match = 'max'):
+    def load_model_bm25(self, model_file, string_match = 'max', k1 = 1.2, b = 0.75):
         """Load model into memory and prepare for bm25"""
         model_dict = pickle.load(open(model_file,"rb"))
         self.title_freq_dict = model_dict["title_freq_dict"]
@@ -226,7 +226,7 @@ class Descriptor:
             self.desc_idf[desc] = math.log((number_of_titles - len(titles) + 0.5)/(len(titles) + 0.5))
         self.title_K = {}
         for title, freq in self.title_freq_dict.items():
-            self.title_K[title] = k1 * (1 - b + b * freq / avg_title_freq)
+            self.title_K[title] = k1 * (1 - b + b * freq/avg_title_freq)
 
     def load_model_and(self, model_file, string_match = 'max'):
         """Load model into memory and prepare for and logic"""
@@ -412,8 +412,8 @@ class Descriptor:
         self.co_freq_dict = model_dict["co_freq_dict"]
 
         title_after_prune = {}
-        for i, (desc, titles) in enumerate(self.co_freq_dict.items()):
-            for title, freq in titles.items():
+        for i, (desc, titles) in list(enumerate(self.co_freq_dict.items())):
+            for title, freq in list(titles.items()):
                 if freq <= prune_threshold:
                     del self.co_freq_dict[desc][title]
                 elif title not in title_after_prune:
@@ -421,11 +421,11 @@ class Descriptor:
             if len(self.co_freq_dict[desc]) == 0:
                 del self.co_freq_dict[desc]
         
-        for i, (title, freq) in enumerate(self.title_freq_dict.items()):
+        for i, (title, freq) in list(enumerate(self.title_freq_dict.items())):
             if title not in title_after_prune:
                 del self.title_freq_dict[title]
 
-        for i, (desc, freq) in enumerate(self.desc_freq_dict.items()):
+        for i, (desc, freq) in list(enumerate(self.desc_freq_dict.items())):
             if desc not in self.co_freq_dict:
                 del self.desc_freq_dict[desc]
         
