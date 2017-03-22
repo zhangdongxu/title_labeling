@@ -1,6 +1,7 @@
 
 This tool helps you to count co-occurrence frequency of descriptors given movie titles.
 When the service started, it requires users' queries and returns a list of movie titles most related.
+This code is written in Python3.
 
 ----
 
