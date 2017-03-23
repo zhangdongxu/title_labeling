@@ -43,6 +43,8 @@ group.add_argument("-b","--build",help="builds a new model.", action="store_true
 group.add_argument("-m","--merge",help="merges the model files",action="store_true")
 group.add_argument("-p","--prune",help="prunes the model file",action="store_true")
 group.add_argument("-e","--evaluate",help="evaluates a model with a ranking strategy",action="store_true")
+group.add_argument("-c","--clean",help="clean title names.",action="store_true")
+group.add_argument("-q","--query",help="input a query description and return a full ranking list.",action="store_true")
 parser.add_argument("--model_type",help="This parameter defines the type of the new model. \
                     The type is distinguished by its window type [paragraph|window|weightedwindow]",\
                     default="window")
@@ -58,7 +60,8 @@ parser.add_argument("--mergedir",help="the path of directory where model files w
         be merged.",default="/home/dongxu/descriptor/model")
 parser.add_argument("--window_size",help="window size for left and right windows",type=int,default=10)
 parser.add_argument("--smooth_factor",help="smoothing factor for window weights",type=int,default=2)
-parser.add_argument("--prune_file", help="the path of output pruned model file",default="prune")
+parser.add_argument("--pruned_file", help="the path of output pruned model file",default="prune")
+parser.add_argument("--cleaned_model", help="the path of output cleaned model file",default="prune")
 parser.add_argument("--prune_threshold", help="the path of output pruned model file",type=float, default=1.0)
 parser.add_argument("--testset",help="testset for evaluation",default="")
 parser.add_argument("--score_method",help="scoring method for evaluation and fastload. [and|raw|bm25]",default="and")
@@ -66,7 +69,7 @@ parser.add_argument("--topk", help="sets top k value for ranking", type=int, def
 parser.add_argument("--partial_rank", help="this flag is useful to speed up ranking for service", action="store_true")
 parser.add_argument("--string_match", help="string match method. Maxmatch use trie. \
                                             Allmatch use Aho-Corasick automation. [max|all]", default="max")
-
+parser.add_argument("--query_string",help="input description string",default="电影")
 
 class Descriptor:
     def __init__(self):
@@ -240,21 +243,34 @@ class Descriptor:
         elif self.string_match == 'all':
             self.desc_actrie = actrie.load(self.desc_freq_dict)
 
+        word_popularity_dict = {}
+        for line in open('clusters300k.txt'):
+            l = line.strip().split('\t')
+            title = "".join(l[0].split())
+            prob = float(l[1])
+            word_popularity_dict[title] = prob
+        smallest_prob = -15.7357
+
         self.max_length_desc = 0
         for desc in self.co_freq_dict:
             if len(desc) > self.max_length_desc:
                 self.max_length_desc = len(desc)
 
-        self.title_sqrt_dict = copy.deepcopy(self.title_freq_dict)
-        for title in self.title_sqrt_dict:
-            self.title_sqrt_dict[title] = math.sqrt(float(self.title_sqrt_dict[title]))
-        self.co_freq_devide_title = copy.deepcopy(self.co_freq_dict)
-        for desc, titles in self.co_freq_devide_title.items():
+        #self.title_sqrt_dict = copy.deepcopy(self.title_freq_dict)
+        #for title in self.title_sqrt_dict:
+        #    self.title_sqrt_dict[title] = math.sqrt(float(self.title_sqrt_dict[title]))
+        self.prob = copy.deepcopy(self.co_freq_dict)
+        for desc, titles in self.prob.items():
             for title in titles:
-                self.co_freq_devide_title[desc][title] = math.log((self.co_freq_devide_title[desc][title] + 1)\
-                                                                  /self.title_sqrt_dict[title])
-        self.score_not_appear = math.log(1 / max([value for title, value in self.title_sqrt_dict.items()]))
-
+                if title in word_popularity_dict:
+                    self.prob[desc][title] = math.log(self.prob[desc][title] + 1)\
+                                                       - word_popularity_dict[title]
+                else:
+                    self.prob[desc][title] = math.log(self.prob[desc][title] + 1)\
+                                                       - smallest_prob
+                    
+        self.score_not_appear = -smallest_prob
+        
     def load_testset(self, testset):
         """Load data for evaluation, where there are some descriptions 
            and their corresponding movie titles from Douban"""
@@ -385,8 +401,8 @@ class Descriptor:
         else:
             title_scores = {}
             for desc in ngram_descs:
-                if desc in self.co_freq_devide_title:
-                    for title, score in self.co_freq_devide_title[desc].items():
+                if desc in self.prob:
+                    for title, score in self.prob[desc].items():
                         if title not in title_scores:
                             title_scores[title] = [score, 1]
                         else:
@@ -403,6 +419,23 @@ class Descriptor:
                         key = lambda x: x[1], reverse=True)[:topk]:
                     result_titles.append(k)
         return result_titles
+
+    def rank_titles_full_rank(self, ngram_descs):
+        title_scores = {}
+        for desc in ngram_descs:
+            if desc in self.prob:
+                for title, score in self.prob[desc].items():
+                    if title not in title_scores:
+                        title_scores[title] = [score, 1]
+                    else:
+                        title_scores[title][0] += score
+                        title_scores[title][1] += 1
+        max_num_desc = max([score[1] for title, score in title_scores.items()])
+        for i, (title, score) in enumerate(title_scores.items()):
+            title_scores[title] = score[0] + (max_num_desc - score[1]) * self.score_not_appear
+        for k, v in sorted(title_scores.items(), \
+                    key = lambda x: x[1], reverse=True):
+            print(k + '\t' + str(v))
 
     def prune(self, model_file, prune_threshold = 1.0):
         """load model and prune it with a threshold"""
@@ -428,7 +461,55 @@ class Descriptor:
         for i, (desc, freq) in list(enumerate(self.desc_freq_dict.items())):
             if desc not in self.co_freq_dict:
                 del self.desc_freq_dict[desc]
+
+    def clean_title(self, model_file):
+        """load model and clean title names."""
+        model_dict = pickle.load(open(model_file, "rb"))
+        self.title_freq_dict = model_dict["title_freq_dict"]
+        self.desc_freq_dict = model_dict["desc_freq_dict"]
+        self.co_freq_dict = model_dict["co_freq_dict"]
+
+        remove_string = set((u"<a>", u"</a>", u"&quot"))
+        #remove_punc = set((u".", u",", u"?", u":", u"-", u"(", u")", u"。", u"，", u"：", u"·", u"（", u"）", u"《", u"》"))
         
+        for i, (title, freq) in list(enumerate(self.title_freq_dict.items())):
+            new_title = title
+            for string in remove_string:
+                if string in new_title:
+                    new_title = new_title.replace(string, "")
+            new_title = new_title.strip()
+            #new_title = "".join([ch for ch in new_title if ch not in remove_punc]).strip()
+            if len(new_title) > 30 or len(new_title) == 0:
+                del self.title_freq_dict[title]
+            elif new_title != title:
+                if new_title not in self.title_freq_dict:
+                    self.title_freq_dict[new_title] = freq
+                else:
+                    self.title_freq_dict[new_title] += freq
+                del self.title_freq_dict[title]
+        for i, (desc, titles) in list(enumerate(self.co_freq_dict.items())):
+            for j, (title, freq) in list(enumerate(titles.items())):
+                new_title = title
+                for string in remove_string:
+                    if string in new_title:
+                        new_title = new_title.replace(string, "")
+                new_title = new_title.strip()
+                #new_title = "".join([ch for ch in new_title if ch not in remove_punc]).strip()
+                if len(new_title) > 30 or len(new_title) == 0:
+                    del self.co_freq_dict[desc][title]
+                elif new_title != title:
+                    if new_title not in titles:
+                        self.co_freq_dict[desc][new_title] = titles[title]
+                    else:
+                        self.co_freq_dict[desc][new_title] += titles[title]
+                    del self.co_freq_dict[desc][title]
+                if len(self.co_freq_dict[desc]) == 0:
+                    del self.co_freq_dict[desc]
+        
+        for i, (desc, freq) in list(enumerate(self.desc_freq_dict.items())):
+            if desc not in self.co_freq_dict:
+                del self.desc_freq_dict[desc]
+    
     def evaluate(self, model_file, method = 'raw', topk = 10, partial_rank = False):
         load_data = self.score_methods[method][0]
         ranking = self.score_methods[method][1]
@@ -731,7 +812,12 @@ def main():
     elif args.prune:
         descriptor = Descriptor()
         descriptor.prune(args.model, prune_threshold = args.prune_threshold)
-        descriptor.save_model(args.prune_file)
+        descriptor.save_model(args.pruned_file)
+
+    elif args.clean:
+        descriptor = Descriptor()
+        descriptor.clean_title(args.model)
+        descriptor.save_model(args.cleaned_model)
 
     elif args.merge:
         output_model_file = args.model
@@ -743,6 +829,19 @@ def main():
         descriptor = Descriptor()
         descriptor.load_testset(args.testset)
         descriptor.evaluate(args.model, args.score_method, args.topk, partial_rank = args.partial_rank)
+
+    elif args.query:
+        descriptor = Descriptor()
+        load_model = descriptor.score_methods[args.score_method][0]
+        ranking = descriptor.score_methods[args.score_method][1]
+        if args.string_match == 'max':
+            match_desc = descriptor.match_desc_max
+        elif args.string_match == 'all':
+            match_desc = descriptor.match_desc_all
+        load_model(args.model, args.string_match)
+        ngram_descs = match_desc(args.query_string)
+        descriptor.rank_titles_full_rank(ngram_descs)
+        
 
     elif args.fastload:
         descriptor = Descriptor()
