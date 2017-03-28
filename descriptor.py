@@ -71,15 +71,47 @@ parser.add_argument("--string_match", help="string match method. Maxmatch use tr
                                             Allmatch use Aho-Corasick automation. [max|all]", default="max")
 parser.add_argument("--query_string",help="input description string",default="电影")
 
+def load_model_decorator(func):
+    def wrapper(*args, **kwargs):
+        self = args[0]
+        model_file = args[1]
+        string_match = args[2]
+        model_dict = pickle.load(open(model_file,"rb"))
+        self.title_freq_dict = model_dict["title_freq_dict"]
+        self.desc_freq_dict = model_dict["desc_freq_dict"]
+        self.co_freq_dict = model_dict["co_freq_dict"]
+        self.string_match = string_match
+        if self.string_match == 'max':
+            self.desc_trie = trie.load(self.desc_freq_dict)
+        elif self.string_match == 'all':
+            self.desc_actrie = actrie.load(self.desc_freq_dict)
+
+        self.max_length_desc = 0
+        for desc in self.co_freq_dict:
+            if len(desc) > self.max_length_desc:
+                self.max_length_desc = len(desc)
+
+        func(*args, **kwargs)
+    return wrapper
+
 class Descriptor:
     def __init__(self):
         self.co_freq_dict = {}
         self.title_freq_dict = {}
         self.desc_freq_dict = {}
         self.pattern = re.compile("《(.*?)》") #predefined pattern
-        self.score_methods = {'raw': (self.load_model, self.rank_titles), \
-                                'bm25': (self.load_model_bm25, self.rank_titles_bm25), \
-                                'and': (self.load_model_and, self.rank_titles_and)}
+        self.noise_pattern = re.compile("&#(.*?);") 
+        self.noise_string = set(("<a>", "</a>", "&quot"))
+        self.noise_punc = set((".", ",", "?", ":", "-", "(", ")", "。", "，", \
+                                "！", "、", "：", "·", "（", "）", "《", "》", \
+                                "〉", "〈", "…"))
+        self.number_map = {"1":"一", "2":"二", "3":"三", "4":"四", "5":"五", \
+                           "6":"六", "7":"七", "8":"八", "9":"九", "0":"零", \
+                           "Ⅰ":"一", "Ⅱ":"二", "Ⅲ":"三", "Ⅳ":"四", "X":"十"}
+        self.score_methods = {'raw': (self.load_model_raw, self.rank_titles_raw), \
+                              'bm25': (self.load_model_bm25, self.rank_titles_bm25), \
+                              'and': (self.load_model_and, self.rank_titles_and)}
+        self.nonenglish_space_pattern = re.compile("(?=([^a-zA-Z \t][ \t]+?[^a-zA-Z \t]))")
 
     def list_dir(self, rootdir): 
         """List all file paths inside a given directory (recursively)"""
@@ -176,23 +208,9 @@ class Descriptor:
         self.save_model(output_model_file)
         print("model merged")
 
-    def load_model(self, model_file, string_match = 'max'):
+    @load_model_decorator
+    def load_model_raw(self, model_file, string_match = 'max'):
         """Load model into memory and devide co_freq_dict by sqrt(title_freq) """
-        model_dict = pickle.load(open(model_file,"rb"))
-        self.title_freq_dict = model_dict["title_freq_dict"]
-        self.desc_freq_dict = model_dict["desc_freq_dict"]
-        self.co_freq_dict = model_dict["co_freq_dict"]
-        self.string_match = string_match
-        if self.string_match == 'max':
-            self.desc_trie = trie.load(self.desc_freq_dict)
-        elif self.string_match == 'all':
-            self.desc_actrie = actrie.load(self.desc_freq_dict)
-
-        self.max_length_desc = 0
-        for desc in self.co_freq_dict:
-            if len(desc) > self.max_length_desc:
-                self.max_length_desc = len(desc)
-
         self.title_sqrt_dict = copy.deepcopy(self.title_freq_dict)
         for title in self.title_sqrt_dict:
             self.title_sqrt_dict[title] = math.sqrt(float(self.title_sqrt_dict[title]))
@@ -201,23 +219,9 @@ class Descriptor:
             for title in titles:
                 self.co_freq_devide_title[desc][title] /= self.title_sqrt_dict[title]
 
+    @load_model_decorator
     def load_model_bm25(self, model_file, string_match = 'max', k1 = 1.2, b = 0.75):
         """Load model into memory and prepare for bm25"""
-        model_dict = pickle.load(open(model_file,"rb"))
-        self.title_freq_dict = model_dict["title_freq_dict"]
-        self.desc_freq_dict = model_dict["desc_freq_dict"]
-        self.co_freq_dict = model_dict["co_freq_dict"]
-        self.string_match = string_match
-        if self.string_match == 'max':
-            self.desc_trie = trie.load(self.desc_freq_dict)
-        elif self.string_match == 'all':
-            self.desc_actrie = actrie.load(self.desc_freq_dict)
-
-        self.max_length_desc = 0
-        for desc in self.co_freq_dict:
-            if len(desc) > self.max_length_desc:
-                self.max_length_desc = len(desc)
-
         number_of_titles = len(self.title_freq_dict)
         avg_title_freq = 0
         for title, freq in self.title_freq_dict.items():
@@ -231,18 +235,9 @@ class Descriptor:
         for title, freq in self.title_freq_dict.items():
             self.title_K[title] = k1 * (1 - b + b * freq/avg_title_freq)
 
+    @load_model_decorator
     def load_model_and(self, model_file, string_match = 'max'):
         """Load model into memory and prepare for and logic"""
-        model_dict = pickle.load(open(model_file,"rb"))
-        self.title_freq_dict = model_dict["title_freq_dict"]
-        self.desc_freq_dict = model_dict["desc_freq_dict"]
-        self.co_freq_dict = model_dict["co_freq_dict"]
-        self.string_match = string_match
-        if self.string_match == 'max':
-            self.desc_trie = trie.load(self.desc_freq_dict)
-        elif self.string_match == 'all':
-            self.desc_actrie = actrie.load(self.desc_freq_dict)
-
         word_popularity_dict = {}
         for line in open('clusters300k.txt'):
             l = line.strip().split('\t')
@@ -250,24 +245,38 @@ class Descriptor:
             prob = float(l[1])
             word_popularity_dict[title] = prob
         smallest_prob = -15.7357
+        word_trie = trie.load(word_popularity_dict)
 
-        self.max_length_desc = 0
-        for desc in self.co_freq_dict:
-            if len(desc) > self.max_length_desc:
-                self.max_length_desc = len(desc)
+        normalize2clean = {}
+        for title in self.title_freq_dict:
+            #print(title)
+            new_title = self.replace_number(title)
+            if new_title not in normalize2clean:
+                normalize2clean[new_title] = [title]
+            else:
+                normalize2clean[new_title].append(title)
 
-        #self.title_sqrt_dict = copy.deepcopy(self.title_freq_dict)
-        #for title in self.title_sqrt_dict:
-        #    self.title_sqrt_dict[title] = math.sqrt(float(self.title_sqrt_dict[title]))
-        self.prob = copy.deepcopy(self.co_freq_dict)
-        for desc, titles in self.prob.items():
-            for title in titles:
-                if title in word_popularity_dict:
-                    self.prob[desc][title] = math.log(self.prob[desc][title] + 1)\
-                                                       - word_popularity_dict[title]
-                else:
-                    self.prob[desc][title] = math.log(self.prob[desc][title] + 1)\
-                                                       - smallest_prob
+        self.prob = {}
+        for desc, titles in self.co_freq_dict.items():
+            self.prob[desc] = {}
+            for normalized_title in titles:
+                clean_titles = set(normalize2clean[normalized_title])
+                if normalized_title in clean_titles:
+                    clean_titles.remove(normalized_title)
+                self.prob[desc][normalized_title] = math.log(self.co_freq_dict[desc][normalized_title] + 1)
+                title_probability = 0
+                history_position = 0
+                while(history_position < len(normalized_title)):
+                    offset = word_trie.maxmatch(normalized_title[history_position:])
+                    if offset == 0:
+                        title_probability = smallest_prob
+                        break
+                    else:
+                        title_probability += word_popularity_dict[normalized_title[history_position:history_position + offset]]
+                    history_position += offset
+                self.prob[desc][normalized_title] -= max(title_probability, smallest_prob)
+                for clean_title in clean_titles:
+                    self.prob[desc][clean_title] = self.prob[desc][normalized_title] - 1e-10
                     
         self.score_not_appear = -smallest_prob
         
@@ -319,7 +328,7 @@ class Descriptor:
                     dict_list[j], dict_list[j - 1] = dict_list[j - 1], dict_list[j]
         return dict_list[:topk]
 
-    def rank_titles(self, ngram_descs, topk, partial_rank = False):
+    def rank_titles_raw(self, ngram_descs, topk, partial_rank = False):
         """Given a list of descriptions, return top k most related titles (for example movie names).
            Scoring method is simple addition over each description's corresponding title score,
            where each title score is its co_freq / sqrt(title_freq)"""
@@ -462,50 +471,105 @@ class Descriptor:
             if desc not in self.co_freq_dict:
                 del self.desc_freq_dict[desc]
 
-    def clean_title(self, model_file):
+    def remove_nonenglish_space(self, string):
+        string = string.strip()
+        new_string = ""
+        history = 0
+        for match in self.nonenglish_space_pattern.finditer(string):
+            start = match.start() + 1
+            end = start + len(match.group(1)) - 2
+            new_string += string[history:start]
+            history = end
+        new_string += string[history:]
+        return new_string
+
+    def remove_noise_pattern(self, string):
+        string = string.strip()
+        new_string = ""
+        history = 0
+        for match in self.noise_pattern.finditer(string):
+            start, end = match.span()
+            new_string += string[history:start]
+            history = end
+        new_string += string[history:]
+        return new_string
+
+    def remove_noise_string(self, string):
+        string = string.strip()
+        for s in self.noise_string:
+            string = string.replace(s, "")
+        return string
+
+    def remove_noise_punc(self, string):
+        string = string.strip()
+        return "".join([ch for ch in string if ch not in self.noise_punc])
+
+    def replace_number(self, string):
+        new_string = ""
+        for ch in string:
+            if ch in self.number_map:
+                new_string += self.number_map[ch]
+            else:
+                new_string += ch
+        return new_string
+
+    def cleanup_title(self, model_file):
         """load model and clean title names."""
         model_dict = pickle.load(open(model_file, "rb"))
         self.title_freq_dict = model_dict["title_freq_dict"]
         self.desc_freq_dict = model_dict["desc_freq_dict"]
         self.co_freq_dict = model_dict["co_freq_dict"]
 
-        remove_string = set((u"<a>", u"</a>", u"&quot"))
-        #remove_punc = set((u".", u",", u"?", u":", u"-", u"(", u")", u"。", u"，", u"：", u"·", u"（", u"）", u"《", u"》"))
-        
         for i, (title, freq) in list(enumerate(self.title_freq_dict.items())):
-            new_title = title
-            for string in remove_string:
-                if string in new_title:
-                    new_title = new_title.replace(string, "")
-            new_title = new_title.strip()
-            #new_title = "".join([ch for ch in new_title if ch not in remove_punc]).strip()
-            if len(new_title) > 30 or len(new_title) == 0:
+            if title not in self.title_freq_dict:
+                continue
+            clean_title = self.remove_nonenglish_space(\
+                           self.remove_noise_punc(\
+                            self.remove_noise_string(\
+                             self.remove_noise_pattern(title)))).lower()
+            new_title = self.replace_number(clean_title)
+            if clean_title != title:
+                if clean_title not in self.title_freq_dict:
+                    self.title_freq_dict[clean_title] = freq
+                else:
+                    self.title_freq_dict[clean_title] += freq
                 del self.title_freq_dict[title]
-            elif new_title != title:
+
+            if len(new_title) > 30 or len(new_title) == 0:
+                del self.title_freq_dict[clean_title]
+            elif new_title != clean_title:
                 if new_title not in self.title_freq_dict:
                     self.title_freq_dict[new_title] = freq
                 else:
                     self.title_freq_dict[new_title] += freq
-                del self.title_freq_dict[title]
+                #del self.title_freq_dict[title_clean]
+                
         for i, (desc, titles) in list(enumerate(self.co_freq_dict.items())):
             for j, (title, freq) in list(enumerate(titles.items())):
-                new_title = title
-                for string in remove_string:
-                    if string in new_title:
-                        new_title = new_title.replace(string, "")
-                new_title = new_title.strip()
-                #new_title = "".join([ch for ch in new_title if ch not in remove_punc]).strip()
-                if len(new_title) > 30 or len(new_title) == 0:
-                    del self.co_freq_dict[desc][title]
-                elif new_title != title:
-                    if new_title not in titles:
-                        self.co_freq_dict[desc][new_title] = titles[title]
+                if title not in self.co_freq_dict[desc]:
+                    continue
+                clean_title = self.remove_nonenglish_space(\
+                               self.remove_noise_punc(\
+                                self.remove_noise_string(\
+                                 self.remove_noise_pattern(title)))).lower()
+                new_title = self.replace_number(clean_title)
+                if clean_title != title:
+                    if clean_title not in self.co_freq_dict[desc]:
+                        self.co_freq_dict[desc][clean_title] = freq
                     else:
-                        self.co_freq_dict[desc][new_title] += titles[title]
+                        self.co_freq_dict[desc][clean_title] += freq
                     del self.co_freq_dict[desc][title]
+
+                if len(new_title) > 30 or len(new_title) == 0:
+                    del self.co_freq_dict[desc][clean_title]
+                elif new_title != clean_title:
+                    if new_title not in titles:
+                        self.co_freq_dict[desc][new_title] = freq
+                    else:
+                        self.co_freq_dict[desc][new_title] += freq
+                    del self.co_freq_dict[desc][clean_title]
                 if len(self.co_freq_dict[desc]) == 0:
                     del self.co_freq_dict[desc]
-        
         for i, (desc, freq) in list(enumerate(self.desc_freq_dict.items())):
             if desc not in self.co_freq_dict:
                 del self.desc_freq_dict[desc]
@@ -816,7 +880,7 @@ def main():
 
     elif args.clean:
         descriptor = Descriptor()
-        descriptor.clean_title(args.model)
+        descriptor.cleanup_title(args.model)
         descriptor.save_model(args.cleaned_model)
 
     elif args.merge:

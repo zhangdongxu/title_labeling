@@ -43,7 +43,7 @@ class Trie:
     def maxmatchall(self, string):
         matched_words = []
         history_position = 0
-        while(history_position < len(string) - 1):
+        while(history_position < len(string)):
             offset = self.maxmatch(string[history_position:])
             if offset == 0:
                 offset = 1
