@@ -5,8 +5,11 @@ class Trie:
     Search.
     maxmatch.
     """
-    def __init__(self, tree = {}):
-        self.tree = tree
+    def __init__(self, words):
+        self.tree = {}
+        for word in words:
+            self.insert(word)
+
 
     def insert(self, word):
         current = self.tree
@@ -51,9 +54,3 @@ class Trie:
                 matched_words.append(string[history_position:history_position + offset])
             history_position += offset
         return matched_words
-
-def load(words):
-    trie = Trie()
-    for word in words:
-        trie.insert(word)
-    return trie

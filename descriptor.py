@@ -47,7 +47,7 @@ group.add_argument("-c","--clean",help="clean title names.",action="store_true")
 group.add_argument("-q","--query",help="input a query description and return a full ranking list.",action="store_true")
 parser.add_argument("--model_type",help="This parameter defines the type of the new model. \
                     The type is distinguished by its window type [paragraph|window|weightedwindow]",\
-                    default="window")
+                    default="weightedwindow")
 parser.add_argument("--input",help="the path of the input directory that contains the corpus\
         to cope with.")
 parser.add_argument("--descriptor",help="the path of the file that contains\
@@ -64,7 +64,6 @@ parser.add_argument("--pruned_file", help="the path of output pruned model file"
 parser.add_argument("--cleaned_model", help="the path of output cleaned model file",default="prune")
 parser.add_argument("--prune_threshold", help="the path of output pruned model file",type=float, default=1.0)
 parser.add_argument("--testset",help="testset for evaluation",default="")
-parser.add_argument("--score_method",help="scoring method for evaluation and fastload. [and|raw|bm25]",default="and")
 parser.add_argument("--topk", help="sets top k value for ranking", type=int, default=10)
 parser.add_argument("--partial_rank", help="this flag is useful to speed up ranking for service", action="store_true")
 parser.add_argument("--string_match", help="string match method. Maxmatch use trie. \
@@ -80,16 +79,26 @@ def load_model_decorator(func):
         self.title_freq_dict = model_dict["title_freq_dict"]
         self.desc_freq_dict = model_dict["desc_freq_dict"]
         self.co_freq_dict = model_dict["co_freq_dict"]
+
         self.string_match = string_match
         if self.string_match == 'max':
-            self.desc_trie = trie.load(self.desc_freq_dict)
+            self.desc_trie = trie.Trie(self.co_freq_dict)
         elif self.string_match == 'all':
-            self.desc_actrie = actrie.load(self.desc_freq_dict)
+            self.desc_actrie = actrie.load(self.co_freq_dict)
 
         self.max_length_desc = 0
         for desc in self.co_freq_dict:
             if len(desc) > self.max_length_desc:
                 self.max_length_desc = len(desc)
+
+        self.word_popularity_dict = {}
+        for line in open('clusters300k.txt'):
+            l = line.strip().split('\t')
+            title = "".join(l[0].split())
+            prob = float(l[1])
+            self.word_popularity_dict[title] = prob
+        self.smallest_prob = -15.7357
+        self.word_trie = trie.Trie(self.word_popularity_dict)
 
         func(*args, **kwargs)
     return wrapper
@@ -102,16 +111,15 @@ class Descriptor:
         self.pattern = re.compile("《(.*?)》") #predefined pattern
         self.noise_pattern = re.compile("&#(.*?);") 
         self.noise_string = set(("<a>", "</a>", "&quot"))
+        self.nonenglish_space_pattern = re.compile("(?=([^a-zA-Z \t][ \t]+?[^a-zA-Z \t]))")
         self.noise_punc = set((".", ",", "?", ":", "-", "(", ")", "。", "，", \
                                 "！", "、", "：", "·", "（", "）", "《", "》", \
                                 "〉", "〈", "…"))
         self.number_map = {"1":"一", "2":"二", "3":"三", "4":"四", "5":"五", \
                            "6":"六", "7":"七", "8":"八", "9":"九", "0":"零", \
                            "Ⅰ":"一", "Ⅱ":"二", "Ⅲ":"三", "Ⅳ":"四", "X":"十"}
-        self.score_methods = {'raw': (self.load_model_raw, self.rank_titles_raw), \
-                              'bm25': (self.load_model_bm25, self.rank_titles_bm25), \
-                              'and': (self.load_model_and, self.rank_titles_and)}
-        self.nonenglish_space_pattern = re.compile("(?=([^a-zA-Z \t][ \t]+?[^a-zA-Z \t]))")
+        self.scenarios = {'server': (self.load_model, self.rank_titles),\
+                          'query':(self.load_model_normalize, self.rank_titles_full_rank)}
 
     def list_dir(self, rootdir): 
         """List all file paths inside a given directory (recursively)"""
@@ -136,7 +144,7 @@ class Descriptor:
         desc_set = set(descriptors)
         self.string_match = string_match
         if self.string_match == 'max':
-            self.desc_trie = trie.load(desc_set)
+            self.desc_trie = trie.Trie(desc_set)
         elif self.string_match == 'all':
             self.desc_actrie = actrie.load(desc_set)
             
@@ -209,77 +217,79 @@ class Descriptor:
         print("model merged")
 
     @load_model_decorator
-    def load_model_raw(self, model_file, string_match = 'max'):
-        """Load model into memory and devide co_freq_dict by sqrt(title_freq) """
-        self.title_sqrt_dict = copy.deepcopy(self.title_freq_dict)
-        for title in self.title_sqrt_dict:
-            self.title_sqrt_dict[title] = math.sqrt(float(self.title_sqrt_dict[title]))
-        self.co_freq_devide_title = copy.deepcopy(self.co_freq_dict)
-        for desc, titles in self.co_freq_devide_title.items():
-            for title in titles:
-                self.co_freq_devide_title[desc][title] /= self.title_sqrt_dict[title]
-
-    @load_model_decorator
-    def load_model_bm25(self, model_file, string_match = 'max', k1 = 1.2, b = 0.75):
-        """Load model into memory and prepare for bm25"""
-        number_of_titles = len(self.title_freq_dict)
-        avg_title_freq = 0
-        for title, freq in self.title_freq_dict.items():
-            avg_title_freq += freq
-        avg_title_freq /= float(number_of_titles)
-
-        self.desc_idf = {}
+    def load_model(self, model_file, string_match = 'max'):
+        """Load model into memory,
+           count probability of (description, "《》" ) given a title"""
+        self.prob = {}
         for desc, titles in self.co_freq_dict.items():
-            self.desc_idf[desc] = math.log((number_of_titles - len(titles) + 0.5)/(len(titles) + 0.5))
-        self.title_K = {}
-        for title, freq in self.title_freq_dict.items():
-            self.title_K[title] = k1 * (1 - b + b * freq/avg_title_freq)
-
+            self.prob[desc] = {}
+            for title in titles:
+                self.prob[desc][title] = math.log(self.co_freq_dict[desc][title] + 1)
+                title_probability = 0
+                history_position = 0
+                while(history_position < len(title)):
+                    offset = self.word_trie.maxmatch(title[history_position:])
+                    if offset == 0:
+                        title_probability = self.smallest_prob
+                        break
+                    else:
+                        title_probability += self.word_popularity_dict[title[history_position:history_position + offset]]
+                    history_position += offset
+                self.prob[desc][title] -= max(title_probability, self.smallest_prob)
+                    
+        self.score_not_appear = -self.smallest_prob
+        
     @load_model_decorator
-    def load_model_and(self, model_file, string_match = 'max'):
-        """Load model into memory and prepare for and logic"""
-        word_popularity_dict = {}
-        for line in open('clusters300k.txt'):
-            l = line.strip().split('\t')
-            title = "".join(l[0].split())
-            prob = float(l[1])
-            word_popularity_dict[title] = prob
-        smallest_prob = -15.7357
-        word_trie = trie.load(word_popularity_dict)
-
+    def load_model_normalize(self, model_file, string_match = 'max'):
+        """Load model into memory,
+           normalize numbers in titles into chinese,
+           add  normalized_title into co_freq_dict and delete original title if they are different.
+           count probability of (description, "《》" ) given a title"""
         normalize2clean = {}
-        for title in self.title_freq_dict:
-            #print(title)
-            new_title = self.replace_number(title)
-            if new_title not in normalize2clean:
-                normalize2clean[new_title] = [title]
+        clean2normalize = {}
+        for title, freq in list(self.title_freq_dict.items()):
+            normalized_title = self.replace_number(title)
+            clean2normalize[title] = normalized_title 
+            if normalized_title not in normalize2clean:
+                normalize2clean[normalized_title] = [title]
             else:
-                normalize2clean[new_title].append(title)
+                normalize2clean[normalized_title].append(title)
+        
+        for desc, titles in list(self.co_freq_dict.items()):
+            for title, freq in list(titles.items()):
+                normalized_title = clean2normalize[title]
+                if normalized_title != title:
+                    if normalized_title not in self.co_freq_dict[desc]:
+                        self.co_freq_dict[desc][normalized_title] = freq
+                    else:
+                        self.co_freq_dict[desc][normalized_title] += freq
+                    del self.co_freq_dict[desc][title]
 
         self.prob = {}
         for desc, titles in self.co_freq_dict.items():
             self.prob[desc] = {}
-            for normalized_title in titles:
-                clean_titles = set(normalize2clean[normalized_title])
-                if normalized_title in clean_titles:
-                    clean_titles.remove(normalized_title)
+            for normalized_title, freq in titles.items():
                 self.prob[desc][normalized_title] = math.log(self.co_freq_dict[desc][normalized_title] + 1)
                 title_probability = 0
                 history_position = 0
                 while(history_position < len(normalized_title)):
-                    offset = word_trie.maxmatch(normalized_title[history_position:])
+                    offset = self.word_trie.maxmatch(normalized_title[history_position:])
                     if offset == 0:
-                        title_probability = smallest_prob
+                        title_probability = self.smallest_prob
                         break
                     else:
-                        title_probability += word_popularity_dict[normalized_title[history_position:history_position + offset]]
+                        title_probability += self.word_popularity_dict[normalized_title[history_position:history_position + offset]]
                     history_position += offset
-                self.prob[desc][normalized_title] -= max(title_probability, smallest_prob)
+                self.prob[desc][normalized_title] -= max(title_probability, self.smallest_prob)
+
+                clean_titles = set(normalize2clean[normalized_title])
+                if normalized_title in clean_titles:
+                    clean_titles.remove(normalized_title)
                 for clean_title in clean_titles:
                     self.prob[desc][clean_title] = self.prob[desc][normalized_title] - 1e-10
                     
-        self.score_not_appear = -smallest_prob
-        
+        self.score_not_appear = -self.smallest_prob
+
     def load_testset(self, testset):
         """Load data for evaluation, where there are some descriptions 
            and their corresponding movie titles from Douban"""
@@ -328,73 +338,7 @@ class Descriptor:
                     dict_list[j], dict_list[j - 1] = dict_list[j - 1], dict_list[j]
         return dict_list[:topk]
 
-    def rank_titles_raw(self, ngram_descs, topk, partial_rank = False):
-        """Given a list of descriptions, return top k most related titles (for example movie names).
-           Scoring method is simple addition over each description's corresponding title score,
-           where each title score is its co_freq / sqrt(title_freq)"""
-        result_titles = []
-        if len(ngram_descs) == 0:
-            print("描述词未出现")
-            sys.stdout.flush()
-            for k,v in sorted(self.title_freq_dict.items(), \
-                        key = lambda x: x[1], reverse=True)[:topk]:
-                result_titles.append(k)
-
-        else:
-            title_scores = {}
-            for desc in ngram_descs:
-                if desc in self.co_freq_devide_title:
-                    for title, score in self.co_freq_devide_title[desc].items():
-                        if title not in title_scores:
-                            title_scores[title] = score
-                        else:
-                            title_scores[title] += score
-            
-            if partial_rank == True:
-                for k, v in self.bubble_sort_descent(title_scores.items(), topk):
-                    result_titles.append(k)
-            else:
-                for k, v in sorted(title_scores.items(), \
-                        key = lambda x: x[1], reverse=True)[:topk]:
-                    result_titles.append(k)
-        return result_titles
-
-    def rank_titles_bm25(self, ngram_descs, topk, k1=1.2, b=0.75, partial_rank = False):
-        """Given a list of descriptions, return top k most related titles (for example movie names).
-           Scoring method is similar to bm25. This method take into consideration 
-           the importance of each description and the popularity of titles
-           in a conditional probabilistic way"""
-        result_titles = []
-        if len(ngram_descs) == 0:
-            print("描述词未出现")
-            sys.stdout.flush()
-            for k,v in sorted(self.title_freq_dict.items(), \
-                        key = lambda x: x[1], reverse=True)[:topk]:
-                result_titles.append(k)
-
-        else:
-            self.desc_idf
-            self.title_K
-
-            title_scores = {}
-            for desc in ngram_descs:
-                if desc in self.co_freq_dict:
-                    for title, freq in self.co_freq_dict[desc].items():
-                        if title not in title_scores:
-                            title_scores[title] = self.desc_idf[desc] * freq * (k1 + 1) / (freq + self.title_K[title])
-                        else:
-                            title_scores[title] += self.desc_idf[desc] * freq * (k1 + 1) / (freq + self.title_K[title])
-            
-            if partial_rank == True:
-                for k, v in self.bubble_sort_descent(title_scores.items(), topk):
-                    result_titles.append(k)
-            else:
-                for k, v in sorted(title_scores.items(), \
-                        key = lambda x: x[1], reverse=True)[:topk]:
-                    result_titles.append(k)
-        return result_titles
-
-    def rank_titles_and(self, ngram_descs, topk, partial_rank = False):
+    def rank_titles(self, ngram_descs, topk, partial_rank = False):
         """Given a list of descriptions, return top k most related titles (for example movie names).
            Scoring method is the sum of title scores over different descriptions. 
            title score = log(co_freq/sqrt(title_freq)). 
@@ -527,22 +471,14 @@ class Descriptor:
                            self.remove_noise_punc(\
                             self.remove_noise_string(\
                              self.remove_noise_pattern(title)))).lower()
-            new_title = self.replace_number(clean_title)
             if clean_title != title:
                 if clean_title not in self.title_freq_dict:
                     self.title_freq_dict[clean_title] = freq
                 else:
                     self.title_freq_dict[clean_title] += freq
                 del self.title_freq_dict[title]
-
-            if len(new_title) > 30 or len(new_title) == 0:
+            if len(clean_title) > 30 or len(clean_title) == 0:
                 del self.title_freq_dict[clean_title]
-            elif new_title != clean_title:
-                if new_title not in self.title_freq_dict:
-                    self.title_freq_dict[new_title] = freq
-                else:
-                    self.title_freq_dict[new_title] += freq
-                #del self.title_freq_dict[title_clean]
                 
         for i, (desc, titles) in list(enumerate(self.co_freq_dict.items())):
             for j, (title, freq) in list(enumerate(titles.items())):
@@ -552,7 +488,6 @@ class Descriptor:
                                self.remove_noise_punc(\
                                 self.remove_noise_string(\
                                  self.remove_noise_pattern(title)))).lower()
-                new_title = self.replace_number(clean_title)
                 if clean_title != title:
                     if clean_title not in self.co_freq_dict[desc]:
                         self.co_freq_dict[desc][clean_title] = freq
@@ -560,13 +495,7 @@ class Descriptor:
                         self.co_freq_dict[desc][clean_title] += freq
                     del self.co_freq_dict[desc][title]
 
-                if len(new_title) > 30 or len(new_title) == 0:
-                    del self.co_freq_dict[desc][clean_title]
-                elif new_title != clean_title:
-                    if new_title not in titles:
-                        self.co_freq_dict[desc][new_title] = freq
-                    else:
-                        self.co_freq_dict[desc][new_title] += freq
+                if len(clean_title) > 30 or len(clean_title) == 0:
                     del self.co_freq_dict[desc][clean_title]
                 if len(self.co_freq_dict[desc]) == 0:
                     del self.co_freq_dict[desc]
@@ -574,9 +503,9 @@ class Descriptor:
             if desc not in self.co_freq_dict:
                 del self.desc_freq_dict[desc]
     
-    def evaluate(self, model_file, method = 'raw', topk = 10, partial_rank = False):
-        load_data = self.score_methods[method][0]
-        ranking = self.score_methods[method][1]
+    def evaluate(self, model_file, method = 'server', topk = 10, partial_rank = False):
+        load_data = self.scenarios[method][0]
+        ranking = self.scenarios[method][1]
         load_data(model_file)
         print("data loaded")
         average_good_proportion = 0
@@ -892,25 +821,25 @@ def main():
     elif args.evaluate:
         descriptor = Descriptor()
         descriptor.load_testset(args.testset)
-        descriptor.evaluate(args.model, args.score_method, args.topk, partial_rank = args.partial_rank)
+        descriptor.evaluate(args.model, "server", args.topk, partial_rank = args.partial_rank)
 
     elif args.query:
         descriptor = Descriptor()
-        load_model = descriptor.score_methods[args.score_method][0]
-        ranking = descriptor.score_methods[args.score_method][1]
+        load_model = descriptor.scenarios["query"][0]
+        ranking = descriptor.scenarios["query"][1]
         if args.string_match == 'max':
             match_desc = descriptor.match_desc_max
         elif args.string_match == 'all':
             match_desc = descriptor.match_desc_all
         load_model(args.model, args.string_match)
         ngram_descs = match_desc(args.query_string)
-        descriptor.rank_titles_full_rank(ngram_descs)
+        ranking(ngram_descs)
         
 
     elif args.fastload:
         descriptor = Descriptor()
-        load_model = descriptor.score_methods[args.score_method][0]
-        ranking = descriptor.score_methods[args.score_method][1]
+        load_model = descriptor.scenarios["server"][0]
+        ranking = descriptor.scenarios["server"][1]
         if args.string_match == 'max':
             match_desc = descriptor.match_desc_max
         elif args.string_match == 'all':
@@ -946,7 +875,7 @@ def main():
         cofreq_devide_title = copy.deepcopy(model_dict["co_freq_dict"])# dict[desc][title]
         for desc in model_dict["co_freq_dict"]:
             for title in model_dict["co_freq_dict"][desc]:
-                cofreq_devide_title[desc][title] = (cofreq_devide_title[desc][title] + 1)/title_sqrt_dict[title]
+                cofreq_devide_title[desc][title] = cofreq_devide_title[desc][title]/title_sqrt_dict[title]
 
         cofreq_devide_desc = {}# dict[title][desc]
         for desc in model_dict["co_freq_dict"]:
