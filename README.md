@@ -86,7 +86,9 @@ Three strategies can be implemented with parameter `--model_type`:
 
 When scoring a title given a description, we follow the fomula below:
 
-P(d, c| t) = P(d| c, t)                 * P(c| t) 
+P(d, c| t) 
+           
+           = P(d| c, t)                 * P(c| t) 
 
            = P(d| c, t)                 * (P(t| c) * P(c) / P(t))
 
@@ -96,7 +98,7 @@ P(d, c| t) = P(d| c, t)                 * P(c| t)
 
 where for example, d is "电影", c is "《》" and t is "阿甘正传"
 
-logP(t) = max(P(t1) * P(t2)..., -15.7357) where ti is max substring using forward maxmatch. 
+logP(t) = max(P(t1) * P(t2)... , -15.7357) where ti is max substring using forward maxmatch. 
 
 *Edited by Dongxu Zhang on Feb 24th, 2017.*
    ​
