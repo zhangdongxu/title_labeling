@@ -225,19 +225,9 @@ class Descriptor:
             self.prob[desc] = {}
             for title in titles:
                 self.prob[desc][title] = math.log(self.co_freq_dict[desc][title] + 1)
-                title_probability = 0
-                history_position = 0
-                while(history_position < len(title)):
-                    offset = self.word_trie.maxmatch(title[history_position:])
-                    if offset == 0:
-                        title_probability = self.smallest_prob
-                        break
-                    else:
-                        title_probability += self.word_popularity_dict[title[history_position:history_position + offset]]
-                    history_position += offset
-                self.prob[desc][title] -= max(title_probability, self.smallest_prob)
-                    
-        self.score_not_appear = -self.smallest_prob
+                self.prob[desc][title] -= math.log(math.sqrt(self.title_freq_dict[title]))
+
+        self.score_not_appear = -math.log(math.sqrt(max([freq for title, freq in self.title_freq_dict.items()])))
         
     @load_model_decorator
     def load_model_normalize(self, model_file, string_match = 'max'):
