@@ -464,13 +464,15 @@ class Descriptor:
         self.desc_freq_dict = model_dict["desc_freq_dict"]
         self.co_freq_dict = model_dict["co_freq_dict"]
 
+        raw2clean = {}
         for i, (title, freq) in list(enumerate(self.title_freq_dict.items())):
             if title not in self.title_freq_dict:
                 continue
             clean_title = self.remove_nonenglish_space(\
                            self.remove_noise_punc(\
-                            self.remove_noise_string(\
-                             self.remove_noise_pattern(title)))).lower()
+                           self.remove_noise_string(\
+                           self.remove_noise_pattern(title)))).lower()
+            raw2clean[title] = clean_title
             if clean_title != title:
                 if clean_title not in self.title_freq_dict:
                     self.title_freq_dict[clean_title] = freq
@@ -484,10 +486,14 @@ class Descriptor:
             for j, (title, freq) in list(enumerate(titles.items())):
                 if title not in self.co_freq_dict[desc]:
                     continue
-                clean_title = self.remove_nonenglish_space(\
-                               self.remove_noise_punc(\
-                                self.remove_noise_string(\
-                                 self.remove_noise_pattern(title)))).lower()
+                if title in raw2clean:
+                    clean_title = raw2clean[title]
+                else:
+                    clean_title = self.remove_nonenglish_space(\
+                                   self.remove_noise_punc(\
+                                   self.remove_noise_string(\
+                                   self.remove_noise_pattern(title)))).lower()
+                    
                 if clean_title != title:
                     if clean_title not in self.co_freq_dict[desc]:
                         self.co_freq_dict[desc][clean_title] = freq
@@ -504,9 +510,9 @@ class Descriptor:
                 del self.desc_freq_dict[desc]
     
     def evaluate(self, model_file, method = 'server', topk = 10, partial_rank = False):
-        load_data = self.scenarios[method][0]
+        load_model = self.scenarios[method][0]
         ranking = self.scenarios[method][1]
-        load_data(model_file)
+        load_model(model_file, "max")
         print("data loaded")
         average_good_proportion = 0
         for desc, titles in self.test_dict.items():
