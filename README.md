@@ -86,7 +86,9 @@ Three strategies can be implemented with parameter `--model_type`:
 
 When scoring a title given a description, we follow the fomula below:
 
-P(d, c| t) = P(d| c, t)                 * P(c| t) 
+P(d, c| t) 
+           
+           = P(d| c, t)                 * P(c| t) 
 
            = P(d| c, t)                 * (P(t| c) * P(c) / P(t))
 
