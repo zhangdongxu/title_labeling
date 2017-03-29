@@ -35,3 +35,4 @@ done
 
 mkdir -p $workdir/model
 python3 descriptor.py -m --mergedir $workdir/outputs/$modelname --model $workdir/model/$modelname
+python3 descriptor.py -c --model $workdir/model/$modelname --cleaned_model $workdir/model/$modelname.clean

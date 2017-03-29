@@ -18,7 +18,8 @@ descriptor_path=/zfs/octp/sogout/outputs/extract_desc/desc.txt
 count=0
 
 mkdir -p $workdir/model/$modelname
-mkdir -p $workdir/model/$modelname.prune
+mkdir -p $workdir/model/$modelname.clean
+mkdir -p $workdir/model/$modelname.clean.prune
 
 for partition in 0 2 4 6 8
 do
@@ -44,8 +45,9 @@ done
 
 wait
 python3 descriptor.py -m --mergedir $workdir/outputs/$modelname/freq/sogout_data.$partition --model $workdir/model/$modelname/$modelname.sogout_data.$partition
-python3 descriptor.py -p --prune_threshold $prune_threshold --model $workdir/model/$modelname/$modelname.sogout_data.$partition.p --prune_file $workdir/model/$modelname.prune/$modelname.sogout_data.$partition.prune
+python3 descriptor.py -c --model $workdir/model/$modelname/$modelname.sogout_data.$partition --cleaned_model $workdir/model/$modelname.clean/$modelname.sogout_data.$partition.clean
+python3 descriptor.py -p --prune_threshold $prune_threshold --model $workdir/model/$modelname.clean/$modelname.sogout_data.$partition.clean.p --prune_file $workdir/model/$modelname.clean.prune/$modelname.sogout_data.$partition.clean.prune
 
 done
 
-python3 descriptor.py -m --mergedir $workdir/model/$modelname.prune --model $workdir/model/$modelname.prune
+python3 descriptor.py -m --mergedir $workdir/model/$modelname.clean.prune --model $workdir/model/$modelname.clean.prune
