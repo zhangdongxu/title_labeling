@@ -15,7 +15,7 @@ parser.add_argument("--address", help="the ip and port this service want to list
 parser.add_argument("--topk", help="top k", type=int, default=10)
 args = parser.parse_args()
 descriptor = Descriptor()
-descriptor.load_model_and(args.model)
+descriptor.load_model(args.model, "max")
 
 class movieServicer(movie_pb2_grpc.FindMovieServiceServicer):
     def FindMovies(self, request, context):
@@ -23,7 +23,7 @@ class movieServicer(movie_pb2_grpc.FindMovieServiceServicer):
         print(time.strftime('%Y-%m-%d/%H:%M:%S', time.localtime(time.time())) + '\t' + query)
         sys.stdout.flush()
         ngram_desc = descriptor.match_desc_max(query)
-        titles = descriptor.rank_titles_and(ngram_desc, args.topk, partial_rank = True)
+        titles = descriptor.rank_titles(ngram_desc, args.topk, partial_rank = True)
         movies = [title for title in titles]
         return movie_pb2.FindMovieReply(movies=movies)
 
