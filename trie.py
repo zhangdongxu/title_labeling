@@ -4,21 +4,22 @@ class Trie:
     Insert.
     Search.
     maxmatch.
+    maxmatchall
     """
     def __init__(self, words):
-        self.tree = {}
+        self._tree = {}
         for word in words:
             self.insert(word)
 
 
     def insert(self, word):
-        current = self.tree
+        current = self._tree
         for character in word:
             current = current.setdefault(character, {})
         current.setdefault("_end")
 
     def search(self, word):
-        current = self.tree
+        current = self._tree
         for character in word:
             if character not in current:
                 return False
@@ -28,7 +29,7 @@ class Trie:
         return False
 
     def maxmatch(self, string):
-        current = self.tree
+        current = self._tree
         current_position = 0
         matched_last_position = 0
         for character in string:
@@ -54,3 +55,7 @@ class Trie:
                 matched_words.append(string[history_position:history_position + offset])
             history_position += offset
         return matched_words
+
+    @property
+    def tree(self):
+        return self._tree
