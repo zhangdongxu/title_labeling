@@ -64,7 +64,7 @@ parser.add_argument("--mergedir",help="the path of directory where model files w
         be merged.",default="/home/dongxu/descriptor/model")
 parser.add_argument("--window_size",help="window size for left and right windows",type=int,default=10)
 parser.add_argument("--smooth_factor",help="smoothing factor for window weights",type=int,default=2)
-parser.add_argument("--pruned_file", help="the path of output pruned model file",default="prune")
+parser.add_argument("--pruned_model", help="the path of output pruned model file",default="prune")
 parser.add_argument("--cleaned_model", help="the path of output cleaned model file",default="prune")
 parser.add_argument("--prune_threshold", help="the path of output pruned model file",type=float, default=1.0)
 parser.add_argument("--testset",help="testset for evaluation",default="")
@@ -113,7 +113,7 @@ class Descriptor:
         self._title_freq_dict = {}
         self._desc_freq_dict = {}
         self.pattern = re.compile("《(.*?)》") #predefined pattern
-        self.noise_pattern = re.compile("&#(.*?);") 
+        self.noise_pattern = re.compile("&(.*?);") 
         self.noise_string = set(("<a>", "</a>", "&quot"))
         self.nonenglish_space_pattern = re.compile("(?=([^a-zA-Z \t][ \t]+?[^a-zA-Z \t]))")
         self.noise_punc = set((".", ",", "?", ":", "-", "(", ")", "。", "，", \
@@ -817,7 +817,7 @@ def main():
     elif args.prune:
         descriptor = Descriptor()
         descriptor.prune(args.model, prune_threshold = args.prune_threshold)
-        descriptor.save_model(args.pruned_file)
+        descriptor.save_model(args.pruned_model)
 
     elif args.clean:
         descriptor = Descriptor()
