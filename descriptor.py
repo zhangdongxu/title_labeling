@@ -118,7 +118,7 @@ class Descriptor:
         self.nonenglish_space_pattern = re.compile("(?=([^a-zA-Z \t][ \t]+?[^a-zA-Z \t]))")
         self.noise_punc = set((".", ",", "?", ":", "-", "(", ")", "。", "，", \
                                 "！", "、", "：", "·", "（", "）", "《", "》", \
-                                "〉", "〈", "…"))
+                                "〉", "〈", "…", "_"))
         self.number_map = {"1":"一", "2":"二", "3":"三", "4":"四", "5":"五", \
                            "6":"六", "7":"七", "8":"八", "9":"九", "0":"零", \
                            "Ⅰ":"一", "Ⅱ":"二", "Ⅲ":"三", "Ⅳ":"四", "X":"十"}
@@ -380,21 +380,25 @@ class Descriptor:
         return result_titles
 
     def rank_titles_full_rank(self, ngram_descs):
-        title_scores = {}
-        for desc in ngram_descs:
-            if desc in self.prob:
-                for title, score in self.prob[desc].items():
-                    if title not in title_scores:
-                        title_scores[title] = [score, 1]
-                    else:
-                        title_scores[title][0] += score
-                        title_scores[title][1] += 1
-        max_num_desc = max([score[1] for title, score in title_scores.items()])
-        for i, (title, score) in enumerate(title_scores.items()):
-            title_scores[title] = score[0] + (max_num_desc - score[1]) * self.score_not_appear
-        for k, v in sorted(title_scores.items(), \
-                    key = lambda x: x[1], reverse=True):
-            print(k + '\t' + str(v))
+        if len(ngram_descs) == 0:
+            print("描述词未出现")
+            sys.stdout.flush()
+        else:
+            title_scores = {}
+            for desc in ngram_descs:
+                if desc in self.prob:
+                    for title, score in self.prob[desc].items():
+                        if title not in title_scores:
+                            title_scores[title] = [score, 1]
+                        else:
+                            title_scores[title][0] += score
+                            title_scores[title][1] += 1
+            max_num_desc = max([score[1] for title, score in title_scores.items()])
+            for i, (title, score) in enumerate(title_scores.items()):
+                title_scores[title] = score[0] + (max_num_desc - score[1]) * self.score_not_appear
+            for k, v in sorted(title_scores.items(), \
+                        key = lambda x: x[1], reverse=True):
+                print(k + '\t' + str(v))
 
     def prune(self, model_file, prune_threshold = 1.0):
         """load model and prune it with a threshold"""
@@ -870,6 +874,7 @@ def main():
                 print("——————————————————————")
                 for title in titles:
                     print(title)
+                print("——————————————————————")
             elif act == "exit":
                 break
 
