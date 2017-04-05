@@ -39,16 +39,20 @@ import trie, actrie
 parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument("-l","--load",help="loads previous model instead of building a new one and \
-                                       also transforms the co-occurrence dict. This mode lets you\
-                                       check both title ranking and desc ranking", action="store_true")
+                                       also transforms the co-occurrence dict. \
+                                       This mode lets you check both title ranking and desc \
+                                       ranking", action="store_true")
 group.add_argument("-fl","--fastload",help="loads previous model instead of building a new one, \
-                                            this mode simulates the server's action.", action="store_true")
+                                            this mode simulates the server's action.", \
+                                      action="store_true")
 group.add_argument("-b","--build",help="builds a new model.", action="store_true")
 group.add_argument("-m","--merge",help="merges the model files",action="store_true")
 group.add_argument("-p","--prune",help="prunes the model file",action="store_true")
-group.add_argument("-e","--evaluate",help="evaluates a model with a ranking strategy",action="store_true")
+group.add_argument("-e","--evaluate",help="evaluates a model with a ranking strategy", \
+                                     action="store_true")
 group.add_argument("-c","--clean",help="clean title names.",action="store_true")
-group.add_argument("-q","--query",help="input a query description and return a full ranking list.",action="store_true")
+group.add_argument("-q","--query",help="input a query description and return a full ranking \
+                                        list.",action="store_true")
 parser.add_argument("--model_type",help="This parameter defines the type of the new model. \
                     The type is distinguished by its window type [paragraph|window|weightedwindow]",\
                     default="weightedwindow")
@@ -57,21 +61,27 @@ parser.add_argument("--input",help="the path of the input directory that contain
 parser.add_argument("--descriptor",help="the path of the file that contains\
         descriptors",default="/zfs/octp/sogout/outputs/extract_desc/desc.txt")
 parser.add_argument("--title",help="the path of the file that contains film titles. \
-                                    If this parameter is not given, script will match titles with brackets only.",default="")
+                                    If this parameter is not given, script will match titles \
+                                    with brackets only.",default="")
 parser.add_argument("--model",help="the path of the model to save or load",\
-        required=True)
-parser.add_argument("--mergedir",help="the path of directory where model files were saved and will\
-        be merged.",default="/home/dongxu/descriptor/model")
-parser.add_argument("--window_size",help="window size for left and right windows",type=int,default=10)
-parser.add_argument("--smooth_factor",help="smoothing factor for window weights",type=int,default=2)
-parser.add_argument("--pruned_model", help="the path of output pruned model file",default="prune")
+                              required=True)
+parser.add_argument("--mergedir",help="the path of directory where model files were saved and \
+                                       will be merged.",default="/home/dongxu/descriptor/model")
+parser.add_argument("--window_size",help="window size for left and right windows",type=int, \
+                                    default=10)
+parser.add_argument("--smooth_factor",help="smoothing factor for window weights",type=int, \
+                                      default=2)
+parser.add_argument("--pruned_model", help="the path of output pruned model file", default="prune")
 parser.add_argument("--cleaned_model", help="the path of output cleaned model file",default="prune")
-parser.add_argument("--prune_threshold", help="the path of output pruned model file",type=float, default=1.0)
+parser.add_argument("--prune_threshold", help="the path of output pruned model file", \
+                                         type=float, default=1.0)
 parser.add_argument("--testset",help="testset for evaluation",default="")
 parser.add_argument("--topk", help="sets top k value for ranking", type=int, default=10)
-parser.add_argument("--partial_rank", help="this flag is useful to speed up ranking for service", action="store_true")
+parser.add_argument("--partial_rank", help="this flag is useful to speed up ranking for service", \
+                                      action="store_true")
 parser.add_argument("--string_match", help="string match method. Maxmatch use trie. \
-                                            Allmatch use Aho-Corasick automation. [max|all]", default="max")
+                                            Allmatch use Aho-Corasick automation. [max|all]", \
+                                      default="max")
 parser.add_argument("--query_string",help="input description string",default="电影")
 
 def load_model_decorator(func):
@@ -124,7 +134,7 @@ class Descriptor:
                            "Ⅰ":"一", "Ⅱ":"二", "Ⅲ":"三", "Ⅳ":"四", "X":"十"}
         self.scenarios = {'server': (self.load_model, self.rank_titles),\
                           'query':(self.load_model_normalize, self.rank_titles_full_rank)}
-
+    
     @property
     def co_freq_dict(self):
         return self._co_freq_dict
@@ -243,7 +253,9 @@ class Descriptor:
                 self.prob[desc][title] = math.log(self._co_freq_dict[desc][title] + 1)\
                                         -math.log(math.sqrt(self._title_freq_dict[title]))
 
-        self.score_not_appear = -math.log(math.sqrt(max([freq for title, freq in self._title_freq_dict.items()])))
+        self.score_not_appear = -math.log(\
+                                 math.sqrt(\
+                                 max([freq for title, freq in self._title_freq_dict.items()])))
         
     @load_model_decorator
     def load_model_normalize(self, model_file, string_match = 'max'):
@@ -275,7 +287,8 @@ class Descriptor:
         for desc, titles in self._co_freq_dict.items():
             self.prob[desc] = {}
             for normalized_title, freq in titles.items():
-                self.prob[desc][normalized_title] = math.log(self._co_freq_dict[desc][normalized_title] + 1)
+                self.prob[desc][normalized_title] = math.log(\
+                                                    self._co_freq_dict[desc][normalized_title] + 1)
                 title_probability = 0
                 history_position = 0
                 while(history_position < len(normalized_title)):
@@ -284,7 +297,9 @@ class Descriptor:
                         title_probability = self.smallest_prob
                         break
                     else:
-                        title_probability += self.word_popularity_dict[normalized_title[history_position:history_position + offset]]
+                        title_probability += self.word_popularity_dict[\
+                                             normalized_title[\
+                                             history_position:history_position + offset]]
                     history_position += offset
                 self.prob[desc][normalized_title] -= max(title_probability, self.smallest_prob)
 
@@ -577,7 +592,8 @@ class DescriptorParagraph(Descriptor):
             descriptor_match = self._descriptor_allmatch
 
         if input_file[-4:] == '.bz2':
-            lines = subprocess.check_output(["bunzip2","-c",input_file]).decode('utf-8','replace').split('\n')
+            lines = subprocess.check_output(["bunzip2","-c",input_file]).\
+                    decode('utf-8','replace').split('\n')
         else:
             lines = open(input_file, encoding='utf-8', errors='replace')
             
@@ -651,8 +667,10 @@ class DescriptorWindow(Descriptor):
             if add_index == 0:
                 current_index += 1
             else:
-                self.index_desc_start[current_index].append(string[current_index: current_index + add_index])
-                self.index_desc_end[current_index + add_index - 1].append(string[current_index: current_index + add_index])
+                self.index_desc_start[current_index].\
+                     append(string[current_index: current_index + add_index])
+                self.index_desc_end[current_index + add_index - 1].\
+                     append(string[current_index: current_index + add_index])
                 current_index += add_index
 
     def set_window_weight(self, window_size):
@@ -671,7 +689,8 @@ class DescriptorWindow(Descriptor):
             descriptor_match = self._descriptor_allmatch
 
         if input_file[-4:] == '.bz2':
-            lines = subprocess.check_output(["bunzip2","-c",input_file]).decode('utf-8','replace').split('\n')
+            lines = subprocess.check_output(["bunzip2","-c",input_file]).\
+                    decode('utf-8','replace').split('\n')
         else:
             lines = open(input_file, encoding='utf-8', errors='replace')
             
@@ -723,14 +742,16 @@ class DescriptorWindow(Descriptor):
             #count frequency of co-occured descriptors near each title
             for i, (start, end) in enumerate(title_positions):
                 if i == 0:
-                    left_window = (start - self.window_size if start - self.window_size > 0 else 0, start)
+                    left_window = (start - self.window_size \
+                                   if start - self.window_size > 0 else 0, start)
                 else:
                     if start - title_positions[i - 1][1] > self.window_size:
                         left_window = (start - self.window_size, start)
                     else:
                         left_window = (title_positions[i - 1][1], start)
                 if i == len(title_positions) - 1:
-                    right_window = (end, end + self.window_size if end + self.window_size < len(line) else len(line))
+                    right_window = (end, end + self.window_size \
+                                    if end + self.window_size < len(line) else len(line))
                 else:
                     if title_positions[i + 1][0] - end > self.window_size:
                         right_window = (end, end + self.window_size)
@@ -892,7 +913,8 @@ def main():
         cofreq_devide_title = copy.deepcopy(model_dict["co_freq_dict"])# dict[desc][title]
         for desc in model_dict["co_freq_dict"]:
             for title in model_dict["co_freq_dict"][desc]:
-                cofreq_devide_title[desc][title] = cofreq_devide_title[desc][title]/title_sqrt_dict[title]
+                cofreq_devide_title[desc][title] = cofreq_devide_title[desc][title]/\
+                                                   title_sqrt_dict[title]
 
         cofreq_devide_desc = {}# dict[title][desc]
         for desc in model_dict["co_freq_dict"]:
@@ -934,7 +956,6 @@ def main():
                                 "\t" + str(model_dict["title_freq_dict"][k]))
             elif act == "exit":
                 break
-
 
 if __name__ == '__main__':
     main()
