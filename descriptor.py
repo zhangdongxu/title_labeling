@@ -126,15 +126,18 @@ class Descriptor:
         self.noise_pattern = re.compile("&(.*?);") 
         self.noise_string = set(("<a>", "</a>", "&quot"))
         self.nonenglish_space_pattern = re.compile("(?=([^a-zA-Z \t][ \t]+?[^a-zA-Z \t]))")
-        self.noise_punc = set((".", ",", "?", ":", "-", "(", ")", "。", "，", \
-                                "！", "、", "：", "·", "（", "）", "《", "》", \
+        self.noise_punc = set((".", ",", "?", ":", "-", "(", ")", "。", "，", 
+                                "！", "、", "：", "·", "（", "）", "《", "》", 
                                 "〉", "〈", "…", "_"))
-        self.number_map = {"1":"一", "2":"二", "3":"三", "4":"四", "5":"五", \
-                           "6":"六", "7":"七", "8":"八", "9":"九", "0":"零", \
+        self.number_map = {"1":"一", "2":"二", "3":"三", "4":"四", "5":"五",
+                           "6":"六", "7":"七", "8":"八", "9":"九", "0":"零",
                            "Ⅰ":"一", "Ⅱ":"二", "Ⅲ":"三", "Ⅳ":"四", "X":"十"}
-        self.scenarios = {'server': (self.load_model, self.rank_titles),\
+        self.scenarios = {'server': (self.load_model, self.rank_titles), 
                           'query':(self.load_model_normalize, self.rank_titles_full_rank)}
-    
+   
+    def __repr__(self):
+        return "%s(%r)" % (self.__class__, self.__dict__)
+
     @property
     def co_freq_dict(self):
         return self._co_freq_dict
@@ -192,9 +195,7 @@ class Descriptor:
            Return a list of tuples containing 
            the start and end+1 index of each matched string."""
         iterator = self.pattern.finditer(line)
-        pattern_positions = []
-        for match in iterator:
-            pattern_positions.append(match.span())
+        pattern_positions = [match.span() for match in iterator]
         return pattern_positions
 
     def count_freq(self):
@@ -204,8 +205,8 @@ class Descriptor:
     
     def save_model(self, model_file):
         """Save counted frequency into a model_file using pickle"""
-        model_dict = {"co_freq_dict":self._co_freq_dict, \
-                      "title_freq_dict":self._title_freq_dict, \
+        model_dict = {"co_freq_dict":self._co_freq_dict,
+                      "title_freq_dict":self._title_freq_dict,
                       "desc_freq_dict":self._desc_freq_dict}
         pickle.dump(model_dict, open(model_file + ".p","wb"), protocol=2)
 
@@ -253,8 +254,8 @@ class Descriptor:
                 self.prob[desc][title] = math.log(self._co_freq_dict[desc][title] + 1)\
                                         -math.log(math.sqrt(self._title_freq_dict[title]))
 
-        self.score_not_appear = -math.log(\
-                                 math.sqrt(\
+        self.score_not_appear = -math.log(
+                                 math.sqrt(
                                  max([freq for title, freq in self._title_freq_dict.items()])))
         
     @load_model_decorator
@@ -287,7 +288,7 @@ class Descriptor:
         for desc, titles in self._co_freq_dict.items():
             self.prob[desc] = {}
             for normalized_title, freq in titles.items():
-                self.prob[desc][normalized_title] = math.log(\
+                self.prob[desc][normalized_title] = math.log(
                                                     self._co_freq_dict[desc][normalized_title] + 1)
                 title_probability = 0
                 history_position = 0
@@ -297,8 +298,8 @@ class Descriptor:
                         title_probability = self.smallest_prob
                         break
                     else:
-                        title_probability += self.word_popularity_dict[\
-                                             normalized_title[\
+                        title_probability += self.word_popularity_dict[
+                                             normalized_title[
                                              history_position:history_position + offset]]
                     history_position += offset
                 self.prob[desc][normalized_title] -= max(title_probability, self.smallest_prob)
@@ -345,8 +346,8 @@ class Descriptor:
             if node is None:
                 node = self.desc_actrie
             else:
-                for match_string in node.generate_all_suffix_nodes_values():
-                    ngram_descs.append(match_string)
+                ngram_descs.extend([match_string for match_string in 
+                                                 node.generate_all_suffix_nodes_values()])
         return ngram_descs
 
     def bubble_sort_descent(self, dict_list, topk):
@@ -364,13 +365,11 @@ class Descriptor:
            Scoring method is the sum of title scores over different descriptions. 
            title score = log(co_freq/sqrt(title_freq)). 
            If co_freq = 0, then title score = log(1/sqrt(max_title_freq)) """
-        result_titles = []
         if len(ngram_descs) == 0:
             print("描述词未出现")
             sys.stdout.flush()
-            for k,v in sorted(self._title_freq_dict.items(), \
-                        key = lambda x: x[1], reverse=True)[:topk]:
-                result_titles.append(k)
+            result_titles = [k for k,v in sorted(self._title_freq_dict.items(),
+                        key = lambda x: x[1], reverse=True)[:topk]]
 
         else:
             title_scores = {}
@@ -386,12 +385,10 @@ class Descriptor:
             for i, (title, score) in enumerate(title_scores.items()):
                 title_scores[title] = score[0] + (max_num_desc - score[1]) * self.score_not_appear
             if partial_rank == True:
-                for k, v in self.bubble_sort_descent(title_scores.items(), topk):
-                    result_titles.append(k)
+                result_titles = [k for k, v in self.bubble_sort_descent(title_scores.items(), topk)]
             else:
-                for k, v in sorted(title_scores.items(), \
-                        key = lambda x: x[1], reverse=True)[:topk]:
-                    result_titles.append(k)
+                result_titles = [k for k, v in sorted(title_scores.items(),
+                                   key = lambda x: x[1], reverse=True)[:topk]]
         return result_titles
 
     def rank_titles_full_rank(self, ngram_descs):
@@ -411,7 +408,7 @@ class Descriptor:
             max_num_desc = max([score[1] for title, score in title_scores.items()])
             for i, (title, score) in enumerate(title_scores.items()):
                 title_scores[title] = score[0] + (max_num_desc - score[1]) * self.score_not_appear
-            for k, v in sorted(title_scores.items(), \
+            for k, v in sorted(title_scores.items(),
                         key = lambda x: x[1], reverse=True):
                 print(k + '\t' + str(v))
 
@@ -493,9 +490,9 @@ class Descriptor:
         for i, (title, freq) in list(enumerate(self._title_freq_dict.items())):
             if title not in self._title_freq_dict:
                 continue
-            clean_title = self.remove_nonenglish_space(\
-                           self.remove_noise_punc(\
-                           self.remove_noise_string(\
+            clean_title = self.remove_nonenglish_space(
+                           self.remove_noise_punc(
+                           self.remove_noise_string(
                            self.remove_noise_pattern(title)))).lower()
             raw2clean[title] = clean_title
             if clean_title != title:
@@ -514,9 +511,9 @@ class Descriptor:
                 if title in raw2clean:
                     clean_title = raw2clean[title]
                 else:
-                    clean_title = self.remove_nonenglish_space(\
-                                   self.remove_noise_punc(\
-                                   self.remove_noise_string(\
+                    clean_title = self.remove_nonenglish_space(
+                                   self.remove_noise_punc(
+                                   self.remove_noise_string(
                                    self.remove_noise_pattern(title)))).lower()
                     
                 if clean_title != title:
@@ -554,6 +551,9 @@ class Descriptor:
 
 class DescriptorParagraph(Descriptor):
 
+    def __repr__(self):
+        return "%s(%r)" % (self.__class__, self.__dict__)
+
     def _descriptor_allmatch(self, string):
         """when counting frequency, match all descriptions in a string
            and return matched descriptions in a list"""
@@ -564,8 +564,8 @@ class DescriptorParagraph(Descriptor):
             if node is None:
                 node = self.desc_actrie
             else:
-                for match_data in node.generate_all_suffix_nodes_values():
-                    ngram_descs.append(match_data)
+                ngram_descs.extend([match_data for match_data in 
+                                               node.generate_all_suffix_nodes_values()])
         return ngram_descs
 
     def _descriptor_maxmatch(self, string):
@@ -639,6 +639,9 @@ class DescriptorParagraph(Descriptor):
 
 
 class DescriptorWindow(Descriptor):
+
+    def __repr__(self):
+        return "%s(%r)" % (self.__class__, self.__dict__)
 
     def _descriptor_allmatch(self, string, start, end):
         """when counting frequency, match all descriptions in a string[start:end]
@@ -742,7 +745,7 @@ class DescriptorWindow(Descriptor):
             #count frequency of co-occured descriptors near each title
             for i, (start, end) in enumerate(title_positions):
                 if i == 0:
-                    left_window = (start - self.window_size \
+                    left_window = (start - self.window_size 
                                    if start - self.window_size > 0 else 0, start)
                 else:
                     if start - title_positions[i - 1][1] > self.window_size:
@@ -750,7 +753,7 @@ class DescriptorWindow(Descriptor):
                     else:
                         left_window = (title_positions[i - 1][1], start)
                 if i == len(title_positions) - 1:
-                    right_window = (end, end + self.window_size \
+                    right_window = (end, end + self.window_size 
                                     if end + self.window_size < len(line) else len(line))
                 else:
                     if title_positions[i + 1][0] - end > self.window_size:
@@ -787,6 +790,9 @@ class DescriptorWindow(Descriptor):
 
 
 class DescriptorWeightedWindow(DescriptorWindow):
+    def __repr__(self):
+        return "%s(%r)" % (self.__class__, self.__dict__)
+
 
     def set_window_weight(self, window_size, sf = 2):
         """In this class, we decay window weigth 
@@ -795,8 +801,7 @@ class DescriptorWeightedWindow(DescriptorWindow):
            Shortest distance is 1."""
         self.weight = []
         self.window_size = window_size
-        for i in range(window_size):
-            self.weight.append(float(sf)/(sf + 1 + i))
+        self.weight = [self.weight.append(float(sf)/(sf + 1 + i)) for i in range(window_size)]
 
 
 def main(): 
@@ -937,7 +942,7 @@ def main():
                     continue
                 print("——————————————————————")
                 print("descriptor\tco_freq/desc_freq\tco_freq\tdesc_freq")
-                for k,v in sorted(cofreq_devide_desc[title].items(), key = lambda x: x[1],\
+                for k,v in sorted(cofreq_devide_desc[title].items(), key = lambda x: x[1],
                                   reverse=True)[:args.topk]:
                     print(k + "\t" + str(v) + "\t" + str(model_dict["co_freq_dict"][k][title])\
                                 + "\t" + str(model_dict["desc_freq_dict"][k]))
@@ -950,7 +955,7 @@ def main():
                     continue
                 print("——————————————————————")
                 print("title\tco_freq/sqrt(title_freq)\tco_freq\ttitle_freq")
-                for k,v in sorted(cofreq_devide_title[desc].items(), key = lambda x: x[1],\
+                for k,v in sorted(cofreq_devide_title[desc].items(), key = lambda x: x[1],
                         reverse=True)[:args.topk]:
                     print(k + "\t" + str(v) + "\t" + str(model_dict["co_freq_dict"][desc][k]) +\
                                 "\t" + str(model_dict["title_freq_dict"][k]))
