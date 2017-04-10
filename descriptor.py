@@ -36,6 +36,7 @@ import math
 import sys
 import trie, actrie
 import collections
+import heapq
 
 parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group(required=True)
@@ -331,15 +332,8 @@ class Descriptor:
                                                  node.generate_all_suffix_nodes_values()])
         return ngram_descs
 
-    def bubble_sort_descent(self, dict_list, topk):
-        """partial sort titles with top k 
-           highest scores using bubble sort."""
-        dict_list = list(dict_list)
-        for i in range(topk):
-            for j in range(len(dict_list) - 1, i, -1):
-                if dict_list[j][1] > dict_list[j - 1][1]:
-                    dict_list[j], dict_list[j - 1] = dict_list[j - 1], dict_list[j]
-        return dict_list[:topk]
+    def heap_sort_descent(self, dist_list, topk):
+        return heapq.nlargest(topk, dist_list, key = lambda x:x[1])
 
     def rank_titles(self, ngram_descs, topk, partial_rank = False):
         """Given a list of descriptions, return top k most related titles 
@@ -368,7 +362,7 @@ class Descriptor:
                 title_scores[title] = score[0] + (max_num_desc - score[1]) * self.score_not_appear
             if partial_rank == True:
                 result_titles = [k for k, v in \
-                                 self.bubble_sort_descent(title_scores.items(), topk)]
+                                 self.heap_sort_descent(title_scores.items(), topk)]
             else:
                 result_titles = [k for k, v in sorted(title_scores.items(),
                                    key = lambda x: x[1], reverse=True)[:topk]]
