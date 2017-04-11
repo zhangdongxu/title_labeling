@@ -1,16 +1,31 @@
 class Trie:
     """
     Implement a trie.
-    Insert.
-    Search.
-    maxmatch.
-    maxmatchall
+
+    Example:
+    import trie
+    iterable = ['apple', 'and', 'boy']
+    tr = trie.Trie(iterable)
+    s = 'That boy is eating an apple'
+
+    #First way for string matching:
+    print("\t".join(tr.maxmatchall(s)))
+
+    #Second way for string matching, 
+    #where you can access the index of matched string.
+    current_position = 0
+    while(current_index < len(s)):
+        add_index = tr.maxmatch(s[current_index:])
+        if add_index == 0:
+            current_index += 1
+        else:
+            print(s[current_index:current_index + add_index])
+            current_index += add_index
     """
     def __init__(self, words):
         self._tree = {}
         for word in words:
             self.insert(word)
-
 
     def insert(self, word):
         current = self._tree

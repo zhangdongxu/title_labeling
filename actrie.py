@@ -1,3 +1,25 @@
+'''
+Implement an actrie
+
+Example:
+import actrie
+iterable = ['apple','and', 'boy']
+tr = actrie.load(iterable)
+s = 'That boy is eating an apple.'
+
+#string matching:
+node = tr
+matched_strings = []
+for ch in s:
+    node = node.move(ch)
+    if node is None:
+        node = tr
+    else:
+        matched_strings.extend([match_string for match_string in 
+                                     node.generate_all_suffix_nodes_values()])
+print(' '.join(matched_strings))
+'''
+
 class TrieNode(object):
     ''' Node in a trie tree
     '''
@@ -33,7 +55,7 @@ class TrieNode(object):
 
     @property
     def c(self):
-        return self.c
+        return self._c
 
     @property
     def nexts(self):
