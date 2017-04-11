@@ -46,7 +46,7 @@ done
 wait
 python3 descriptor.py -m --mergedir $workdir/outputs/$modelname/freq/sogout_data.$partition --model $workdir/model/$modelname/$modelname.sogout_data.$partition
 python3 descriptor.py -c --model $workdir/model/$modelname/$modelname.sogout_data.$partition --cleaned_model $workdir/model/$modelname.clean/$modelname.sogout_data.$partition.clean
-python3 descriptor.py -p --prune_threshold $prune_threshold --model $workdir/model/$modelname.clean/$modelname.sogout_data.$partition.clean.p --prune_file $workdir/model/$modelname.clean.prune/$modelname.sogout_data.$partition.clean.prune
+python3 descriptor.py -p --prune_threshold $prune_threshold --model $workdir/model/$modelname.clean/$modelname.sogout_data.$partition.clean.p --pruned_model $workdir/model/$modelname.clean.prune/$modelname.sogout_data.$partition.clean.prune
 
 done
 

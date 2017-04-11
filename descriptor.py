@@ -61,7 +61,7 @@ parser.add_argument("--model_type",help="This parameter defines the type of the 
 parser.add_argument("--input",help="the path of the input directory that contains the corpus\
         to cope with.")
 parser.add_argument("--descriptor",help="the path of the file that contains\
-        descriptors",default="/zfs/octp/sogout/outputs/extract_desc/desc.txt")
+        descriptors",default="data/desc.txt")
 parser.add_argument("--title",help="the path of the file that contains film titles. \
                                     If this parameter is not given, script will match titles \
                                     with brackets only.",default="")
@@ -109,7 +109,7 @@ def load_model_decorator(func):
                 self.max_length_desc = len(desc)
 
         self.word_popularity_dict = {}
-        for line in open('clusters300k.txt'):
+        for line in open('data/clusters300k.txt'):
             l = line.strip().split('\t')
             title = "".join(l[0].split())
             prob = float(l[1])
@@ -732,7 +732,6 @@ class DescriptorWindow(Descriptor):
 class DescriptorWeightedWindow(DescriptorWindow):
     def __repr__(self):
         return "%s(%r)" % (self.__class__, self.__dict__)
-
 
     def set_window_weight(self, window_size, sf = 2):
         """In this class, we decay window weigth 

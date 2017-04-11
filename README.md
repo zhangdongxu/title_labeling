@@ -1,6 +1,6 @@
 
-This tool helps you to count co-occurrence frequency of descriptors given movie titles.
-When the service started, it requires users' queries and returns a list of movie titles most related.
+This tool helps you to count co-occurrence frequency of descriptors given title names.
+When the service starts, it requires users' queries and returns a list of title names most related.
 This code is written in Python3.
 
 ----
@@ -49,7 +49,7 @@ This code is written in Python3.
    python3 descriptor.py -c --model input_model_path --cleaned_model output_model_path
 
    #prune a model with given threshold and model file
-   python3 descriptor.py -p --prune_threshold 1.0 --model input_model_path --prune_file output_pruned_model_path
+   python3 descriptor.py -p --prune_threshold 1.0 --model input_model_path --pruned_model output_pruned_model_path
    
    #load a model and look at rankings in a interactive mode. You can input a string containing several descriptions.
    python3 descriptor.py -fl --model model_path_you_want_to_load --partial_rank
@@ -60,8 +60,8 @@ This code is written in Python3.
    #load a model and generate a full ranking list given a query. Here we suggest you load a cleaned model.
    python3 descriptor.py -q --model model_path_you_want_to_load --query_string 电影 > DianYing.list 
 
-   #load a model and evaluate it with a evaluation set and a ranking method
-   python3 descriptor.py -e --testset evaluation.p --score_method and --partial_rank --model input_model_path
+   #load a model and evaluate it with a evaluation set
+   python3 descriptor.py -e --testset data/evaluation.p --partial_rank --model input_model_path
    ```
 
 5. You can import descriptor.py and instantiate `class Descriptor` or `class DescriptorWeightedWindow`  etc. Or you can inherit them for your needs.
@@ -84,7 +84,9 @@ Three strategies can be implemented with parameter `--model_type`:
 * Window-based co-occurrence
 * Weighted window-based co-occurrence, following the formula: $ smoothingfactor/(smoothingfactor + distance) $
 
-When scoring a title given a description, we follow the fomula below:
+When scoring a title given a description, we follow fomulas below:
+
+For -q mode:
 
 P(d, c| t) 
            
@@ -100,5 +102,13 @@ where for example, d is "电影", c is "《》" and t is "阿甘正传"
 
 logP(t) = max(P(t1) * P(t2)... , -15.7357) where ti is max substring using forward maxmatch. 
 
-*Edited by Dongxu Zhang on Feb 24th, 2017.*
+
+For -fl, -l and server mode:
+
+score(d, t) = 
+
+              log(freq(d, c, t) / sqrt(freq(t, c)))
+
+
+*Edited by Dongxu Zhang on April 10th, 2017.*
    ​
