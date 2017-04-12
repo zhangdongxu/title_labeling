@@ -86,8 +86,6 @@ Three strategies can be implemented with parameter `--model_type`:
 
 When scoring a title given a description, we follow fomulas below:
 
-For -q mode:
-
 P(d, c| t) 
            
            = P(d| c, t)                 * P(c| t) 
@@ -103,11 +101,17 @@ where for example, d is "电影", c is "《》" and t is "阿甘正传"
 logP(t) = max(P(t1) * P(t2)... , -15.7357) where ti is max substring using forward maxmatch. 
 
 
-For -fl, -l and server mode:
+If there are multiple descriptions in the query:
 
-score(d, t) = 
+P(d1, d2, c| t)
 
-              log(freq(d, c, t) / sqrt(freq(t, c)))
+           = P(d1| c, t) * P(d2| c, t)  * P(c| t) 
+
+           = P(d1| c, t) * P(d2| c, t)  * (P(t| c) * P(c) / P(t))
+
+           = [freq(d1, c, t)/freq(c, t)]* [freq(d2, c, t)/freq(c, t)] * ((freq(c, t) / freq(c)) * P(c) / P(t))
+
+           = C2 * [freq(d1, c, t)/freq(c, t)] * [freq(d2, c, t)/freq(c, t)] * freq(c, t) / P(t)
 
 
 *Edited by Dongxu Zhang on April 10th, 2017.*

@@ -235,15 +235,30 @@ class Descriptor:
         """Load model into memory,
            count probability of (description, "《》" ) given a title"""
         self.prob = {}
+        self.prob_title = {}
+        for title in self._title_freq_dict:
+            title_probability = 0
+            history_position = 0
+            while(history_position < len(title)):
+                offset = self.word_trie.maxmatch(title[history_position:])
+                if offset == 0:
+                    title_probability = self.smallest_prob
+                    break
+                else:
+                    title_probability += self.word_popularity_dict[
+                                         title[
+                                         history_position:history_position + offset]]
+                history_position += offset
+            self.prob_title[title] = max(title_probability, self.smallest_prob)
+
         for desc, titles in self._co_freq_dict.items():
             self.prob[desc] = {}
             for title in titles:
                 self.prob[desc][title] = math.log(self._co_freq_dict[desc][title] + 1)\
-                                        -math.log(math.sqrt(self._title_freq_dict[title]))
+                                       - math.log(self._title_freq_dict[title])
 
-        self.score_not_appear = -math.log(
-                                 math.sqrt(
-                                 max([freq for title, freq in self._title_freq_dict.items()])))
+        self.prob_not_appear = -math.log(
+                                 max([freq for title, freq in self._title_freq_dict.items()]))
         
     @load_model_decorator
     def load_model_normalize(self, model_file, string_match = 'max'):
@@ -252,47 +267,55 @@ class Descriptor:
            add  normalized_title into co_freq_dict and delete original title 
            if they are different.
            count probability of (description, "《》" ) given a title"""
-        normalize2clean = collections.defaultdict(list)
-        clean2normalize = {}
+        self.normalize2clean = collections.defaultdict(list)
+        self.clean2normalize = {}
         for title, freq in list(self._title_freq_dict.items()):
             normalized_title = self.replace_number(title)
-            clean2normalize[title] = normalized_title 
-            normalize2clean[normalized_title].append(title)
+            #print(title + '\t'+normalized_title)
+            self.clean2normalize[title] = normalized_title
+            self.normalize2clean[normalized_title].append(title)
+            if normalized_title != title:
+                self.clean2normalize[normalized_title] = normalized_title
+                self._title_freq_dict[normalized_title] += freq
+                del self._title_freq_dict[title]
         
         for desc, titles in list(self._co_freq_dict.items()):
             for title, freq in list(titles.items()):
-                normalized_title = clean2normalize[title]
+                normalized_title = self.clean2normalize[title]
                 if normalized_title != title:
                     self._co_freq_dict[desc][normalized_title] += freq
                     del self._co_freq_dict[desc][title]
 
         self.prob = {}
+        self.prob_title = {}
+        for normalized_title in self._title_freq_dict:
+            title_probability = 0
+            history_position = 0
+            while(history_position < len(normalized_title)):
+                offset = self.word_trie.maxmatch(normalized_title[history_position:])
+                if offset == 0:
+                    title_probability = self.smallest_prob
+                    break
+                else:
+                    title_probability += self.word_popularity_dict[
+                                         normalized_title[
+                                         history_position:history_position + offset]]
+                history_position += offset
+            self.prob_title[normalized_title] = max(title_probability, self.smallest_prob)
+
         for desc, titles in self._co_freq_dict.items():
             self.prob[desc] = {}
             for normalized_title, freq in titles.items():
-                self.prob[desc][normalized_title] = math.log(
-                                                self._co_freq_dict[desc][normalized_title] + 1)
-                title_probability = 0
-                history_position = 0
-                while(history_position < len(normalized_title)):
-                    offset = self.word_trie.maxmatch(normalized_title[history_position:])
-                    if offset == 0:
-                        title_probability = self.smallest_prob
-                        break
-                    else:
-                        title_probability += self.word_popularity_dict[
-                                             normalized_title[
-                                             history_position:history_position + offset]]
-                    history_position += offset
-                self.prob[desc][normalized_title] -= max(title_probability, self.smallest_prob)
-
-                clean_titles = set(normalize2clean[normalized_title])
+                self.prob[desc][normalized_title] = math.log(self._co_freq_dict[desc][normalized_title] + 1)\
+                                                  - math.log(self.title_freq_dict[normalized_title])
+                clean_titles = set(self.normalize2clean[normalized_title])
                 if normalized_title in clean_titles:
                     clean_titles.remove(normalized_title)
                 for clean_title in clean_titles:
                     self.prob[desc][clean_title] = self.prob[desc][normalized_title]
                     
-        self.score_not_appear = -self.smallest_prob
+        self.prob_not_appear = -math.log(
+                                 max([freq for title, freq in self._title_freq_dict.items()]))
 
     def load_testset(self, testset):
         """Load data for evaluation, where there are some descriptions 
@@ -349,17 +372,19 @@ class Descriptor:
 
         else:
             title_scores = {}
+            desc_num = 0
             for desc in ngram_descs:
                 if desc in self.prob:
+                    desc_num += 1
                     for title, score in self.prob[desc].items():
                         if title not in title_scores:
                             title_scores[title] = [score, 1]
                         else:
                             title_scores[title][0] += score
                             title_scores[title][1] += 1
-            max_num_desc = max([score[1] for title, score in title_scores.items()])
             for i, (title, score) in enumerate(title_scores.items()):
-                title_scores[title] = score[0] + (max_num_desc - score[1]) * self.score_not_appear
+                title_scores[title] = score[0] + (desc_num - score[1]) * self.prob_not_appear \
+                                               + math.log(self._title_freq_dict[title]) - self.prob_title[title]
             if partial_rank == True:
                 result_titles = [k for k, v in \
                                  self.heap_sort_descent(title_scores.items(), topk)]
@@ -374,17 +399,22 @@ class Descriptor:
             sys.stdout.flush()
         else:
             title_scores = {}
+            desc_num = 0
             for desc in ngram_descs:
                 if desc in self.prob:
+                    desc_num += 1
                     for title, score in self.prob[desc].items():
                         if title not in title_scores:
                             title_scores[title] = [score, 1]
                         else:
                             title_scores[title][0] += score
                             title_scores[title][1] += 1
-            max_num_desc = max([score[1] for title, score in title_scores.items()])
             for i, (title, score) in enumerate(title_scores.items()):
-                title_scores[title] = score[0] + (max_num_desc - score[1]) * self.score_not_appear
+                #self.clean2normalize[title]
+                #self._title_freq_dict[self.clean2normalize[title]]
+                #self.prob_title[self.clean2normalize[title]]
+                title_scores[title] = score[0] + (desc_num - score[1]) * self.prob_not_appear \
+                                               + math.log(self._title_freq_dict[self.clean2normalize[title]]) - self.prob_title[self.clean2normalize[title]]
             for k, v in sorted(title_scores.items(),
                         key = lambda x: x[1], reverse=True):
                 print(k + '\t' + str(v))
