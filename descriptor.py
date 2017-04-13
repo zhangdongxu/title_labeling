@@ -85,6 +85,7 @@ parser.add_argument("--string_match", help="string match method. Maxmatch use tr
                                             Allmatch use Aho-Corasick automation. [max|all]", \
                                       default="max")
 parser.add_argument("--query_string",help="input description string",default="电影")
+parser.add_argument("--logic",help="scoring logic.[and(default)|or]",default="and")
 
 def load_model_decorator(func):
     def wrapper(*args, **kwargs):
@@ -254,11 +255,13 @@ class Descriptor:
         for desc, titles in self._co_freq_dict.items():
             self.prob[desc] = {}
             for title in titles:
-                self.prob[desc][title] = math.log(self._co_freq_dict[desc][title] + 1)\
-                                       - math.log(self._title_freq_dict[title])
+                self.prob[desc][title] = (self._co_freq_dict[desc][title] + 1)/\
+                                         self._title_freq_dict[title]
 
-        self.prob_not_appear = -math.log(
-                                 max([freq for title, freq in self._title_freq_dict.items()]))
+        self.prob_not_appear = 1.0/max([freq for title, freq in self._title_freq_dict.items()])
+        
+        self.default_result_titles = [k for k,v in sorted(self._title_freq_dict.items(),
+                                     key = lambda x: x[1], reverse=True)]
         
     @load_model_decorator
     def load_model_normalize(self, model_file, string_match = 'max'):
@@ -306,16 +309,17 @@ class Descriptor:
         for desc, titles in self._co_freq_dict.items():
             self.prob[desc] = {}
             for normalized_title, freq in titles.items():
-                self.prob[desc][normalized_title] = math.log(self._co_freq_dict[desc][normalized_title] + 1)\
-                                                  - math.log(self.title_freq_dict[normalized_title])
+                self.prob[desc][normalized_title] = (self._co_freq_dict[desc][normalized_title] + 1)/\
+                                                    self.title_freq_dict[normalized_title]
                 clean_titles = set(self.normalize2clean[normalized_title])
                 if normalized_title in clean_titles:
                     clean_titles.remove(normalized_title)
                 for clean_title in clean_titles:
                     self.prob[desc][clean_title] = self.prob[desc][normalized_title]
                     
-        self.prob_not_appear = -math.log(
-                                 max([freq for title, freq in self._title_freq_dict.items()]))
+        self.prob_not_appear = 1.0/max([freq for title, freq in self._title_freq_dict.items()])
+        self.default_result_titles = [k for k,v in sorted(self._title_freq_dict.items(),
+                                     key = lambda x: x[1], reverse=True)]
 
     def load_testset(self, testset):
         """Load data for evaluation, where there are some descriptions 
@@ -358,7 +362,7 @@ class Descriptor:
     def heap_sort_descent(self, dist_list, topk):
         return heapq.nlargest(topk, dist_list, key = lambda x:x[1])
 
-    def rank_titles(self, ngram_descs, topk, partial_rank = False):
+    def rank_titles(self, ngram_descs, topk, partial_rank = False, logic = 'and'):
         """Given a list of descriptions, return top k most related titles 
            (for example movie names).
            Scoring method is the sum of title scores over different descriptions. 
@@ -367,24 +371,39 @@ class Descriptor:
         if len(ngram_descs) == 0:
             print("描述词未出现")
             sys.stdout.flush()
-            result_titles = [k for k,v in sorted(self._title_freq_dict.items(),
-                        key = lambda x: x[1], reverse=True)[:topk]]
+            result_titles = self.default_result_titles[:topk]
 
         else:
             title_scores = {}
-            desc_num = 0
-            for desc in ngram_descs:
-                if desc in self.prob:
-                    desc_num += 1
-                    for title, score in self.prob[desc].items():
-                        if title not in title_scores:
-                            title_scores[title] = [score, 1]
-                        else:
-                            title_scores[title][0] += score
-                            title_scores[title][1] += 1
-            for i, (title, score) in enumerate(title_scores.items()):
-                title_scores[title] = score[0] + (desc_num - score[1]) * self.prob_not_appear \
+            if logic == 'and':
+                desc_num = 0
+                for desc in ngram_descs:
+                    if desc in self.prob:
+                        desc_num += 1
+                        for title, score in self.prob[desc].items():
+                            if title not in title_scores:
+                                title_scores[title] = [score, 1]
+                            else:
+                                title_scores[title][0] *= score
+                                title_scores[title][1] += 1
+                for i, (title, score) in enumerate(title_scores.items()):
+                    title_scores[title] = math.log(score[0] * (self.prob_not_appear ** (desc_num - score[1])))\
                                                + math.log(self._title_freq_dict[title]) - self.prob_title[title]
+            else:
+                desc_num = 0
+                for desc in ngram_descs:
+                    if desc in self.prob:
+                        desc_num += 1
+                        for title, score in self.prob[desc].items():
+                            if title not in title_scores:
+                                title_scores[title] = [score, 1]
+                            else:
+                                title_scores[title][0] += score
+                                title_scores[title][1] += 1
+                for i, (title, score) in enumerate(title_scores.items()):
+                    title_scores[title] = math.log(score[0] + (self.prob_not_appear * (desc_num - score[1])))\
+                                               + math.log(self._title_freq_dict[title]) - self.prob_title[title]
+                
             if partial_rank == True:
                 result_titles = [k for k, v in \
                                  self.heap_sort_descent(title_scores.items(), topk)]
@@ -393,28 +412,42 @@ class Descriptor:
                                    key = lambda x: x[1], reverse=True)[:topk]]
         return result_titles
 
-    def rank_titles_full_rank(self, ngram_descs):
+    def rank_titles_full_rank(self, ngram_descs, logic = 'and'):
         if len(ngram_descs) == 0:
             print("描述词未出现")
             sys.stdout.flush()
         else:
             title_scores = {}
-            desc_num = 0
-            for desc in ngram_descs:
-                if desc in self.prob:
-                    desc_num += 1
-                    for title, score in self.prob[desc].items():
-                        if title not in title_scores:
-                            title_scores[title] = [score, 1]
-                        else:
-                            title_scores[title][0] += score
-                            title_scores[title][1] += 1
-            for i, (title, score) in enumerate(title_scores.items()):
-                #self.clean2normalize[title]
-                #self._title_freq_dict[self.clean2normalize[title]]
-                #self.prob_title[self.clean2normalize[title]]
-                title_scores[title] = score[0] + (desc_num - score[1]) * self.prob_not_appear \
-                                               + math.log(self._title_freq_dict[self.clean2normalize[title]]) - self.prob_title[self.clean2normalize[title]]
+            if logic == 'and':
+                desc_num = 0
+                for desc in ngram_descs:
+                    if desc in self.prob:
+                        desc_num += 1
+                        for title, score in self.prob[desc].items():
+                            if title not in title_scores:
+                                title_scores[title] = [score, 1]
+                            else:
+                                title_scores[title][0] *= score
+                                title_scores[title][1] += 1
+                for i, (title, score) in enumerate(title_scores.items()):
+                    title_scores[title] = math.log(score[0] * (self.prob_not_appear ** (desc_num - score[1])))\
+                                               + math.log(self._title_freq_dict[self.clean2normalize[title]])\
+                                               - self.prob_title[self.clean2normalize[title]]
+            else:
+                desc_num = 0
+                for desc in ngram_descs:
+                    if desc in self.prob:
+                        desc_num += 1
+                        for title, score in self.prob[desc].items():
+                            if title not in title_scores:
+                                title_scores[title] = [score, 1]
+                            else:
+                                title_scores[title][0] += score
+                                title_scores[title][1] += 1
+                for i, (title, score) in enumerate(title_scores.items()):
+                    title_scores[title] = math.log(score[0] + (self.prob_not_appear * (desc_num - score[1])))\
+                                               + math.log(self._title_freq_dict[self.clean2normalize[title]])\
+                                               - self.prob_title[self.clean2normalize[title]]
             for k, v in sorted(title_scores.items(),
                         key = lambda x: x[1], reverse=True):
                 print(k + '\t' + str(v))
@@ -844,7 +877,7 @@ def main():
             match_desc = descriptor.match_desc_all
         load_model(args.model, args.string_match)
         ngram_descs = match_desc(args.query_string)
-        ranking(ngram_descs)
+        ranking(ngram_descs, logic = args.logic)
         
 
     elif args.fastload:
@@ -865,7 +898,7 @@ def main():
                 string = input()
 
                 ngram_descs = match_desc(string)
-                titles = ranking(ngram_descs, args.topk, partial_rank = args.partial_rank)
+                titles = ranking(ngram_descs, args.topk, partial_rank = args.partial_rank, logic = args.logic)
                 print("——————————————————————")
                 for title in titles:
                     print(title)

@@ -101,8 +101,9 @@ where for example, d is "电影", c is "《》" and t is "阿甘正传"
 logP(t) = max(P(t1) * P(t2)... , -15.7357) where ti is max substring using forward maxmatch. 
 
 
-If there are multiple descriptions in the query:
+If there are multiple descriptions in the query, you can choose different logic strategy [and|or]:
 
+--logic = and
 P(d1, d2, c| t)
 
            = P(d1| c, t) * P(d2| c, t)  * P(c| t) 
@@ -114,5 +115,16 @@ P(d1, d2, c| t)
            = C2 * [freq(d1, c, t)/freq(c, t)] * [freq(d2, c, t)/freq(c, t)] * freq(c, t) / P(t)
 
 
-*Edited by Dongxu Zhang on April 10th, 2017.*
+--logic = or
+P(d1, d2, c| t)
+
+           = (P(d1| c, t) + P(d2| c, t))  * P(c| t) 
+
+           = (P(d1| c, t) + P(d2| c, t))  * (P(t| c) * P(c) / P(t))
+
+           = ([freq(d1, c, t)/freq(c, t)] + [freq(d2, c, t)/freq(c, t)]) * ((freq(c, t) / freq(c)) * P(c) / P(t))
+
+           = C2 * ([freq(d1, c, t)/freq(c, t)] + [freq(d2, c, t)/freq(c, t)]) * freq(c, t) / P(t)
+
+*Edited by Dongxu Zhang on April 13th, 2017.*
    ​
