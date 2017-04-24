@@ -4,7 +4,6 @@ import sys
 import grpc
 import movie_pb2
 import movie_pb2_grpc
-
 import argparse
 from descriptor import Descriptor
 
@@ -12,7 +11,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--model",help="the path of the model to save or load",\
         required=True)
 parser.add_argument("--address", help="the ip and port this service want to listen", default="[::]:5011")
-parser.add_argument("--topk", help="top k", type=int, default=10)
+parser.add_argument("--topk", help="top k", type=int, default=50)
 args = parser.parse_args()
 descriptor = Descriptor()
 descriptor.load_model(args.model, "max")
@@ -23,8 +22,8 @@ class movieServicer(movie_pb2_grpc.FindMovieServiceServicer):
         print(time.strftime('%Y-%m-%d/%H:%M:%S', time.localtime(time.time())) + '\t' + query)
         sys.stdout.flush()
         ngram_desc = descriptor.match_desc_max(query)
-        titles = descriptor.rank_titles(ngram_desc, args.topk, partial_rank = True)
-        movies = [title for title in titles]
+        titles = descriptor.rank_titles(ngram_desc, args.topk)
+        movies = [title for title, _, _ in titles]
         return movie_pb2.FindMovieReply(movies=movies)
 
 def serve():
@@ -35,7 +34,7 @@ def serve():
     print("service started on " + args.address)
     sys.stdout.flush()
     while True:
-        time.sleep(0.1)
+        time.sleep(1)
 
 if __name__ == '__main__':
     serve()

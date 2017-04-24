@@ -37,6 +37,7 @@ import sys
 import trie, actrie
 import collections
 import heapq
+import time
 
 parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group(required=True)
@@ -78,14 +79,12 @@ parser.add_argument("--cleaned_model", help="the path of output cleaned model fi
 parser.add_argument("--prune_threshold", help="the path of output pruned model file", \
                                          type=float, default=1.0)
 parser.add_argument("--testset",help="testset for evaluation",default="")
-parser.add_argument("--topk", help="sets top k value for ranking", type=int, default=10)
-parser.add_argument("--partial_rank", help="this flag is useful to speed up ranking for service", \
-                                      action="store_true")
+parser.add_argument("--topk", help="sets top k value for ranking", type=int, default=50)
 parser.add_argument("--string_match", help="string match method. Maxmatch use trie. \
                                             Allmatch use Aho-Corasick automation. [max|all]", \
                                       default="max")
 parser.add_argument("--query_string",help="input description string",default="电影")
-parser.add_argument("--logic",help="scoring logic.[and(default)|or]",default="and")
+parser.add_argument("--logic",help="scoring logic for query mode. [and(default)|or]",default="and")
 
 def load_model_decorator(func):
     def wrapper(*args, **kwargs):
@@ -235,33 +234,37 @@ class Descriptor:
     def load_model(self, model_file, string_match = 'max'):
         """Load model into memory,
            count probability of (description, "《》" ) given a title"""
-        self.prob = {}
-        self.prob_title = {}
+        self.co_probability = {} #log probability of description given a brackted title
+        self.title_probability = {} #log probability of title as a string
+        self.prescores = {} #save time by doing some computation in model loading step.
         for title in self._title_freq_dict:
-            title_probability = 0
+            title_prob = 0
             history_position = 0
             while(history_position < len(title)):
                 offset = self.word_trie.maxmatch(title[history_position:])
                 if offset == 0:
-                    title_probability = self.smallest_prob
+                    title_prob = self.smallest_prob
                     break
                 else:
-                    title_probability += self.word_popularity_dict[
-                                         title[
+                    title_prob += self.word_popularity_dict[title[
                                          history_position:history_position + offset]]
                 history_position += offset
-            self.prob_title[title] = max(title_probability, self.smallest_prob)
+            self.title_probability[title] = max(title_prob, self.smallest_prob)
 
+        self.prob_not_appear = math.log(1.0/max([freq for 
+                                   title, freq in self._title_freq_dict.items()]))
         for desc, titles in self._co_freq_dict.items():
-            self.prob[desc] = {}
+            self.co_probability[desc] = {}
+            self.prescores[desc] = {}
             for title in titles:
-                self.prob[desc][title] = (self._co_freq_dict[desc][title] + 1)/\
-                                         self._title_freq_dict[title]
+                self.co_probability[desc][title] = \
+                math.log((self._co_freq_dict[desc][title] + 1)\
+                / (self._title_freq_dict[title] + 1))
+                self.prescores[desc][title] = math.log(self._title_freq_dict[title]) \
+                                            - self.title_probability[title]
 
-        self.prob_not_appear = 1.0/max([freq for title, freq in self._title_freq_dict.items()])
-        
-        self.default_result_titles = [k for k,v in sorted(self._title_freq_dict.items(),
-                                     key = lambda x: x[1], reverse=True)]
+        for title, freq in self._title_freq_dict.items():
+            self._title_freq_dict[title] = math.log(freq)
         
     @load_model_decorator
     def load_model_normalize(self, model_file, string_match = 'max'):
@@ -289,37 +292,37 @@ class Descriptor:
                     self._co_freq_dict[desc][normalized_title] += freq
                     del self._co_freq_dict[desc][title]
 
-        self.prob = {}
-        self.prob_title = {}
+        self.co_probability = {}
+        self.title_probability = {}
         for normalized_title in self._title_freq_dict:
-            title_probability = 0
+            title_prob = 0
             history_position = 0
             while(history_position < len(normalized_title)):
                 offset = self.word_trie.maxmatch(normalized_title[history_position:])
                 if offset == 0:
-                    title_probability = self.smallest_prob
+                    title_prob = self.smallest_prob
                     break
                 else:
-                    title_probability += self.word_popularity_dict[
+                    title_prob += self.word_popularity_dict[
                                          normalized_title[
                                          history_position:history_position + offset]]
                 history_position += offset
-            self.prob_title[normalized_title] = max(title_probability, self.smallest_prob)
+            self.title_probability[normalized_title] = max(title_prob, self.smallest_prob)
 
         for desc, titles in self._co_freq_dict.items():
-            self.prob[desc] = {}
+            self.co_probability[desc] = {}
             for normalized_title, freq in titles.items():
-                self.prob[desc][normalized_title] = (self._co_freq_dict[desc][normalized_title] + 1)/\
-                                                    self.title_freq_dict[normalized_title]
+                self.co_probability[desc][normalized_title] = \
+                    (self._co_freq_dict[desc][normalized_title] + 1)/\
+                    (self.title_freq_dict[normalized_title] + 1)
                 clean_titles = set(self.normalize2clean[normalized_title])
                 if normalized_title in clean_titles:
                     clean_titles.remove(normalized_title)
                 for clean_title in clean_titles:
-                    self.prob[desc][clean_title] = self.prob[desc][normalized_title]
+                    self.co_probability[desc][clean_title] = \
+                        self.co_probability[desc][normalized_title]
                     
         self.prob_not_appear = 1.0/max([freq for title, freq in self._title_freq_dict.items()])
-        self.default_result_titles = [k for k,v in sorted(self._title_freq_dict.items(),
-                                     key = lambda x: x[1], reverse=True)]
 
     def load_testset(self, testset):
         """Load data for evaluation, where there are some descriptions 
@@ -362,7 +365,7 @@ class Descriptor:
     def heap_sort_descent(self, dist_list, topk):
         return heapq.nlargest(topk, dist_list, key = lambda x:x[1])
 
-    def rank_titles(self, ngram_descs, topk, partial_rank = False, logic = 'and'):
+    def rank_titles(self, ngram_descs, topk):
         """Given a list of descriptions, return top k most related titles 
            (for example movie names).
            Scoring method is the sum of title scores over different descriptions. 
@@ -371,86 +374,112 @@ class Descriptor:
         if len(ngram_descs) == 0:
             print("描述词未出现")
             sys.stdout.flush()
-            result_titles = self.default_result_titles[:topk]
+            ngram_descs = ["电影"]
+        time1 = time.perf_counter()
 
-        else:
-            title_scores = {}
-            if logic == 'and':
-                desc_num = 0
-                for desc in ngram_descs:
-                    if desc in self.prob:
-                        desc_num += 1
-                        for title, score in self.prob[desc].items():
-                            if title not in title_scores:
-                                title_scores[title] = [score, 1]
-                            else:
-                                title_scores[title][0] *= score
-                                title_scores[title][1] += 1
-                for i, (title, score) in enumerate(title_scores.items()):
-                    title_scores[title] = math.log(score[0] * (self.prob_not_appear ** (desc_num - score[1])))\
-                                               + math.log(self._title_freq_dict[title]) - self.prob_title[title]
+        #rank over all candidate title names.
+        ngram_descs_ = [desc for desc in ngram_descs if desc in self.prescores]
+        title_scores = {}
+        for desc in ngram_descs_:
+            title_scores.update(self.prescores[desc])
+        for desc in ngram_descs_:
+            prob_desc = self.co_probability[desc]
+            for title in prob_desc:
+                title_scores[title] += prob_desc[title] - self.prob_not_appear
+        first_rank_results = dict([(k, v) for k, v in \
+                                 self.heap_sort_descent(title_scores.items(), topk)])
+
+        #rerank over topk title names.
+        first_rank_results_items = list(first_rank_results.items())
+        for i in range(len(first_rank_results_items)):
+            title = first_rank_results_items[i][0]
+            score = first_rank_results_items[i][1]
+            first_rank_results_items[i] = (title, [])
+            for desc in ngram_descs_:
+                #first_rank_results_items[i][1].append(\
+                #    self.co_probability[desc].get(title, self.prob_not_appear))
+                first_rank_results_items[i][1].append(\
+                    self.co_probability[desc].get(title, -10.0))
+            #first_rank_results_items[i][1].extend([self._title_freq_dict[title],
+            #                                -self.title_probability[title], score])
+            if self._title_freq_dict[title] > 10.0:
+                title_freq = 10
             else:
-                desc_num = 0
-                for desc in ngram_descs:
-                    if desc in self.prob:
-                        desc_num += 1
-                        for title, score in self.prob[desc].items():
-                            if title not in title_scores:
-                                title_scores[title] = [score, 1]
-                            else:
-                                title_scores[title][0] += score
-                                title_scores[title][1] += 1
-                for i, (title, score) in enumerate(title_scores.items()):
-                    title_scores[title] = math.log(score[0] + (self.prob_not_appear * (desc_num - score[1])))\
-                                               + math.log(self._title_freq_dict[title]) - self.prob_title[title]
-                
-            if partial_rank == True:
-                result_titles = [k for k, v in \
-                                 self.heap_sort_descent(title_scores.items(), topk)]
-            else:
-                result_titles = [k for k, v in sorted(title_scores.items(),
-                                   key = lambda x: x[1], reverse=True)[:topk]]
-        return result_titles
+                title_freq = self._title_freq_dict[title]
+            first_rank_results_items[i][1].extend([title_freq, 
+                -self.title_probability[title], score])
+        first_rank_results = dict(first_rank_results_items)
+        reranking_results = dict([(title, [0]) for title in first_rank_results])
+        for desc_index in range(len(ngram_descs_) + 1):
+            sorted_first_rank_results_items = sorted(first_rank_results_items, \
+                                                     key = lambda x:x[1][desc_index])
+            history_index = 0 # number of titles that have smaller scores than current title
+            previous_score = sorted_first_rank_results_items[0][1][desc_index] - 1
+            title_index = 0
+            while(title_index < len(sorted_first_rank_results_items)):
+                current_info = sorted_first_rank_results_items[title_index]
+                if current_info[1][desc_index] > previous_score:
+                    #previous_prob = math.log((history_index + 1 + title_index)/2/topk)
+                    previous_prob = math.log((history_index + 1)/topk)
+                    for k in range(history_index, title_index):
+                        reranking_results[sorted_first_rank_results_items[k][0]][0] += previous_prob
+                        reranking_results[sorted_first_rank_results_items[k][0]].append(previous_prob)
+                    history_index = title_index
+                    previous_score = current_info[1][desc_index]
+                title_index += 1
+            #previous_prob = math.log((history_index + 1 + title_index)/2/topk)
+            previous_prob = math.log((history_index + 1)/topk)
+            for k in range(history_index, title_index):
+                reranking_results[sorted_first_rank_results_items[k][0]][0] += previous_prob
+                reranking_results[sorted_first_rank_results_items[k][0]].append(previous_prob)
+        ranking_result = [(title, reranking_score, first_rank_results[title]) for title, reranking_score in sorted(\
+                              reranking_results.items(), key = lambda x:x[1][0], reverse = True)]
+        time2 = time.perf_counter()
+        #print('response time:' + str(time2-time1)[:6] + ' s')
+        return ranking_result 
+            
 
     def rank_titles_full_rank(self, ngram_descs, logic = 'and'):
         if len(ngram_descs) == 0:
             print("描述词未出现")
             sys.stdout.flush()
         else:
-            title_scores = {}
+            title_scores = dict([(t, []) for t in set([title for desc in ngram_descs
+                                                             if desc in self.co_probability
+                                                             for title in self.co_probability[desc]])])
+            ngram_descs_ = [desc for desc in ngram_descs if desc in self.co_probability]
             if logic == 'and':
-                desc_num = 0
-                for desc in ngram_descs:
-                    if desc in self.prob:
-                        desc_num += 1
-                        for title, score in self.prob[desc].items():
-                            if title not in title_scores:
-                                title_scores[title] = [score, 1]
-                            else:
-                                title_scores[title][0] *= score
-                                title_scores[title][1] += 1
-                for i, (title, score) in enumerate(title_scores.items()):
-                    title_scores[title] = math.log(score[0] * (self.prob_not_appear ** (desc_num - score[1])))\
-                                               + math.log(self._title_freq_dict[self.clean2normalize[title]])\
-                                               - self.prob_title[self.clean2normalize[title]]
+                for title in title_scores:
+                    for desc in ngram_descs_:
+                        if title in self.co_probability[desc]:
+                            title_scores[title].append(self.co_probability[desc][title])
+                        else:
+                            title_scores[title].append(self.prob_not_appear)
+                    title_freq = self._title_freq_dict[self.clean2normalize[title]]
+                    log_title_freq = math.log(title_freq)
+                    title_scores[title].extend([log_title_freq,
+                                        -self.title_probability[self.clean2normalize[title]]])
+                    total_score = sum([math.log(score) for score in title_scores[title][:-2]] \
+                                      + title_scores[title][-2:])
+                    title_scores[title].append(total_score)
             else:
-                desc_num = 0
-                for desc in ngram_descs:
-                    if desc in self.prob:
-                        desc_num += 1
-                        for title, score in self.prob[desc].items():
-                            if title not in title_scores:
-                                title_scores[title] = [score, 1]
-                            else:
-                                title_scores[title][0] += score
-                                title_scores[title][1] += 1
-                for i, (title, score) in enumerate(title_scores.items()):
-                    title_scores[title] = math.log(score[0] + (self.prob_not_appear * (desc_num - score[1])))\
-                                               + math.log(self._title_freq_dict[self.clean2normalize[title]])\
-                                               - self.prob_title[self.clean2normalize[title]]
-            for k, v in sorted(title_scores.items(),
-                        key = lambda x: x[1], reverse=True):
-                print(k + '\t' + str(v))
+                for title in title_scores:
+                    for desc in ngram_descs_:
+                        if title in self.co_probability[desc]:
+                            title_scores[title].append(self.co_probability[desc][title])
+                        else:
+                            title_scores[title].append(self.prob_not_appear)
+                    title_freq = self._title_freq_dict[self.clean2normalize[title]]
+                    log_title_freq = math.log(title_freq)
+                    title_scores[title].extend([log_title_freq,  
+                                        -self.title_probability[self.clean2normalize[title]]])
+
+                    total_score = sum([math.log(sum(title_scores[title][:-2]))] \
+                                      + title_scores[title][-2:])
+                    title_scores[title].append(total_score)
+            for title, values in sorted(title_scores.items(),
+                                key=lambda x:x[1][-1], reverse=True):
+                print(title + '\t' + str(values[-1]))
 
     def prune(self, model_file, prune_threshold = 1.0):
         """load model and prune it with a threshold"""
@@ -565,7 +594,7 @@ class Descriptor:
             if desc not in self._co_freq_dict:
                 del self._desc_freq_dict[desc]
     
-    def evaluate(self, model_file, method = 'server', topk = 10, partial_rank = False):
+    def evaluate(self, model_file, method = 'server', topk = 10):
         load_model = self.scenarios[method][0]
         ranking = self.scenarios[method][1]
         load_model(model_file, "max")
@@ -574,8 +603,8 @@ class Descriptor:
         for desc, titles in self.test_dict.items():
             if desc not in self._co_freq_dict:
                 continue
-            result_titles = ranking([desc], topk, partial_rank)
-            for title in result_titles:
+            result_titles = ranking([desc], topk * 5)[:topk]
+            for title, _, _ in result_titles:
                 if title in titles:
                     average_good_proportion += 1
                     break
@@ -865,7 +894,7 @@ def main():
     elif args.evaluate:
         descriptor = Descriptor()
         descriptor.load_testset(args.testset)
-        descriptor.evaluate(args.model, "server", args.topk, partial_rank = args.partial_rank)
+        descriptor.evaluate(args.model, "server", args.topk)
 
     elif args.query:
         descriptor = Descriptor()
@@ -889,22 +918,22 @@ def main():
         elif args.string_match == 'all':
             match_desc = descriptor.match_desc_all
         load_model(args.model, args.string_match)
-        
+        title_format_pattern = re.compile('[\x00-\xff]')
         while(1):
-            print("输入描述[d] or 退出[exit]：[d/exit]")
-            act = input()
-            if act == "d":
-                print("请输入描述：")
-                string = input()
-
-                ngram_descs = match_desc(string)
-                titles = ranking(ngram_descs, args.topk, partial_rank = args.partial_rank, logic = args.logic)
-                print("——————————————————————")
-                for title in titles:
-                    print(title)
-                print("——————————————————————")
-            elif act == "exit":
-                break
+            print("请输入描述：")
+            string = input()
+            ngram_descs = match_desc(string)
+            titles = ranking(ngram_descs, args.topk)
+            print("title".ljust(30) +\
+                  "rank_prob\t" + "rank_prob(" + ")\trank_prob(".join(ngram_descs) + ")\trank_prob(freq(c,t))\t||\t" +\
+                  "log(p(" + "|c,t))\tlog(p(".join(ngram_descs) + "|c,t))\tlog(freq(c,t))\t-log(P(t))")
+            print("——————————————————————")
+            for title, scores, origin_scores in titles:
+                format_title = title + " " * (30 - len(title) * 2 + len(title_format_pattern.findall(title)))
+                print(format_title + \
+                      str(scores[0])[:7] + '\t' +'\t'.join([str(r)[:7] for r in scores[1:]]) + '\t||\t' + 
+                      '\t'.join([str(s)[:7] for s in origin_scores[:-1]]))
+            print("——————————————————————")
 
     elif args.load:
         model_file = args.model

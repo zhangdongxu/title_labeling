@@ -52,13 +52,13 @@ This code is written in Python3.
    python3 descriptor.py -p --prune_threshold 1.0 --model input_model_path --pruned_model output_pruned_model_path
    
    #load a model and look at rankings in a interactive mode. You can input a string containing several descriptions.
-   python3 descriptor.py -fl --model model_path_you_want_to_load --partial_rank
+   python3 descriptor.py -fl --model model_path_you_want_to_load --topk 50
 
    #load a model and look at rankings in a interactive mode. You can input a single description or title name and check out count details.
    python3 descriptor.py -l --model model_path_you_want_to_load 
 
    #load a model and generate a full ranking list given a query. Here we suggest you load a cleaned model.
-   python3 descriptor.py -q --model model_path_you_want_to_load --query_string 电影 > DianYing.list 
+   python3 descriptor.py -q --model model_path_you_want_to_load --query_string 音乐歌曲 --logic or > YinyueGequ.list 
 
    #load a model and evaluate it with a evaluation set
    python3 descriptor.py -e --testset data/evaluation.p --partial_rank --model input_model_path
@@ -79,7 +79,7 @@ This code is written in Python3.
 
 P.S. 
 
-Three strategies can be implemented with parameter `--model_type`: 
+For counting co-occurrence frequency, three strategies can be implemented with parameter `--model_type`: 
 * Paragraph-wise co-occurrence (line-wise)
 * Window-based co-occurrence
 * Weighted window-based co-occurrence, following the formula: $ smoothingfactor/(smoothingfactor + distance) $
@@ -101,9 +101,8 @@ where for example, d is "电影", c is "《》" and t is "阿甘正传"
 logP(t) = max(P(t1) * P(t2)... , -15.7357) where ti is max substring using forward maxmatch. 
 
 
-If there are multiple descriptions in the query, you can choose different logic strategy [and|or]:
+In '-fl' mode, we use 'soft and' logic for multiple descriptions in a query. 
 
---logic = and
 P(d1, d2, c| t)
 
            = P(d1| c, t) * P(d2| c, t)  * P(c| t) 
@@ -114,8 +113,10 @@ P(d1, d2, c| t)
 
            = C2 * [freq(d1, c, t)/freq(c, t)] * [freq(d2, c, t)/freq(c, t)] * freq(c, t) / P(t)
 
+using this probability, we can choose topk title names. Then, a reranking strategy is employed on these topk titles. 
 
---logic = or
+In '-q' mode, we also provide 'or' logic by adding `--or`
+
 P(d1, d2, c| t)
 
            = (P(d1| c, t) + P(d2| c, t))  * P(c| t) 
@@ -125,6 +126,8 @@ P(d1, d2, c| t)
            = ([freq(d1, c, t)/freq(c, t)] + [freq(d2, c, t)/freq(c, t)]) * ((freq(c, t) / freq(c)) * P(c) / P(t))
 
            = C2 * ([freq(d1, c, t)/freq(c, t)] + [freq(d2, c, t)/freq(c, t)]) * freq(c, t) / P(t)
+
+we don't provide reranking strategy in -q mode.
 
 *Edited by Dongxu Zhang on April 13th, 2017.*
    ​
