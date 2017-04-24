@@ -113,7 +113,7 @@ P(d1, d2, c| t)
 
 using this probability, we can choose topk title names. Then, a reranking strategy is employed on these topk titles. 
 
-In '-q' mode, we also provide 'or' logic by adding `--or`:
+In '-q' mode, we also provide 'or' logic by adding `--disjunction`:
 
 P(d1, d2, c| t)
 
