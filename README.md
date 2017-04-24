@@ -79,7 +79,7 @@ This code is written in Python3.
 
 P.S. 
 
-For counting co-occurrence frequency, three strategies can be implemented with parameter `--model_type`: 
+When counting co-occurrence frequency, three strategies can be implemented with parameter `--model_type`: 
 * Paragraph-wise co-occurrence (line-wise)
 * Window-based co-occurrence
 * Weighted window-based co-occurrence, following the formula: $ smoothingfactor/(smoothingfactor + distance) $
@@ -96,12 +96,10 @@ P(d, c| t)
 
            = C1 * freq(d, c, t) / P(t)
 
-where for example, d is "电影", c is "《》" and t is "阿甘正传"
-
+where for example, d is "电影", c is "《》" and t is "阿甘正传". 
 logP(t) = max(P(t1) * P(t2)... , -15.7357) where ti is max substring using forward maxmatch. 
 
-
-In '-fl' mode, we use 'soft and' logic for multiple descriptions in a query. 
+In '-fl' mode, we use 'soft and' logic for multiple descriptions in a query:
 
 P(d1, d2, c| t)
 
@@ -115,7 +113,7 @@ P(d1, d2, c| t)
 
 using this probability, we can choose topk title names. Then, a reranking strategy is employed on these topk titles. 
 
-In '-q' mode, we also provide 'or' logic by adding `--or`
+In '-q' mode, we also provide 'or' logic by adding `--or`:
 
 P(d1, d2, c| t)
 
