@@ -84,7 +84,7 @@ parser.add_argument("--string_match", help="string match method. Maxmatch use tr
                                             Allmatch use Aho-Corasick automation. [max|all]", \
                                       default="max")
 parser.add_argument("--query_string",help="input description string",default="电影")
-parser.add_argument("--logic",help="scoring logic for query mode. [and(default)|or]",default="and")
+parser.add_argument("--disjunction",help="scoring 'or' logic for query mode.",action="store_true")
 
 def load_model_decorator(func):
     def wrapper(*args, **kwargs):
@@ -439,7 +439,7 @@ class Descriptor:
         return ranking_result 
             
 
-    def rank_titles_full_rank(self, ngram_descs, logic = 'and'):
+    def rank_titles_full_rank(self, ngram_descs, or_logic = False):
         if len(ngram_descs) == 0:
             print("描述词未出现")
             sys.stdout.flush()
@@ -448,7 +448,7 @@ class Descriptor:
                                                              if desc in self.co_probability
                                                              for title in self.co_probability[desc]])])
             ngram_descs_ = [desc for desc in ngram_descs if desc in self.co_probability]
-            if logic == 'and':
+            if or_logic == False:
                 for title in title_scores:
                     for desc in ngram_descs_:
                         if title in self.co_probability[desc]:
@@ -906,8 +906,10 @@ def main():
             match_desc = descriptor.match_desc_all
         load_model(args.model, args.string_match)
         ngram_descs = match_desc(args.query_string)
-        ranking(ngram_descs, logic = args.logic)
-        
+        if args.disjunction == True:
+            ranking(ngram_descs, or_logic = True)
+        else:
+            ranking(ngram_descs)
 
     elif args.fastload:
         descriptor = Descriptor()
